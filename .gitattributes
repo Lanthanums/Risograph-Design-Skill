@@ -1,0 +1,14 @@
+# The package is authored with LF endings and the Python scripts are meant to be
+# byte-identical everywhere, so normalise on commit and check out LF on every
+# platform. Without this, a Windows clone with core.autocrlf=true rewrites every
+# .py and .md file on checkout.
+* text=auto eol=lf
+
+# Binary assets are never touched (the package ships none today, but generated
+# decks and element PNGs land in the working tree during use).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.pptx binary
+*.pdf binary

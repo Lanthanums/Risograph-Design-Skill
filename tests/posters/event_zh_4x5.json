@@ -1,0 +1,13 @@
+{
+  "artifact": "poster",
+  "canvas": {"preset": "4:5"},
+  "meta": {"lang": "zh", "palette": "A", "seed": 29, "dialect": ["B", "A"]},
+  "content": {
+    "title": "把问题带来",
+    "subtitle": "一起拆解一个有趣的问题",
+    "date": "10 月 18 日 · 14:00",
+    "venue": "活动地点：学习空间",
+    "body": "带上你最近产生的一个疑问。我们从定义开始，用纸笔画出关系，再把想法变成可以验证的步骤。",
+    "cta": "带一本笔记本来"
+  }
+}

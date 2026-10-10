@@ -1,0 +1,12 @@
+{
+  "artifact": "poster",
+  "canvas": {"preset": "square"},
+  "family": "data_poster",
+  "meta": {"lang": "en", "palette": "D", "seed": 41, "dialect": ["C", "D"], "elements": false},
+  "content": {
+    "title": "A SMALL CHANGE",
+    "key_number": {"value": "24%", "label": "Less water used in the trial"},
+    "body": "Measured across the same set of taps before and after the change. The trial result describes this sample only.",
+    "footer": "Data poster fixture · illustrative trial data"
+  }
+}

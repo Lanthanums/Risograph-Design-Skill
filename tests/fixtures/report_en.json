@@ -1,0 +1,220 @@
+{
+  "meta": {
+    "title": "Quarterly business review",
+    "lang": "en",
+    "scenario": "report",
+    "palette": "C",
+    "print_grammar": "full",
+    "seed": 1201,
+    "total": 5,
+    "media": "media",
+    "bg_manifest": "media/manifest.json",
+    "footer": "NORTHWIND TOOLS - FY26 Q2 REVIEW",
+    "header_right": "QUARTERLY REVIEW",
+    "header_left": "OPERATIONS"
+  },
+  "backgrounds": {
+    "1": {
+      "preset": "cover-bleed-tr"
+    },
+    "2": {
+      "preset": "corner-fade-br"
+    },
+    "3": {
+      "preset": "corner-speckle-tr"
+    },
+    "4": {
+      "reverse": true,
+      "preset": "reverse-circle-br"
+    },
+    "5": {
+      "reverse": true,
+      "preset": "reverse-circle-tr"
+    }
+  },
+  "expect": {
+    "reversed": [
+      4,
+      5
+    ],
+    "archetypes": [
+      "cover",
+      "data",
+      "grid",
+      "divider",
+      "closing"
+    ],
+    "lang_marker": "en"
+  },
+  "pages": [
+    {
+      "archetype": "cover",
+      "header_left": "OPERATIONS",
+      "header_right": "QUARTERLY REVIEW",
+      "question": [
+        "Q: ",
+        "Did the second quarter hold the margin we promised?"
+      ],
+      "title": "Northwind",
+      "title_en": "FY26 Q2",
+      "thesis": [
+        [
+          "Margin held at 41%",
+          {
+            "bold": true
+          }
+        ],
+        [
+          " while volume grew 12%.",
+          {}
+        ]
+      ],
+      "highlight": "Margin held at 41%",
+      "sticker": "Q2",
+      "star": true,
+      "bullets": [
+        "Volume",
+        "Margin",
+        "Returns",
+        "Outlook"
+      ],
+      "subtitle": "Northwind Tools - a quarterly operations review",
+      "aside": "( 2026 / Q2 )",
+      "notes": "Open with the two numbers that frame the quarter: volume up 12%, margin flat at 41%."
+    },
+    {
+      "archetype": "data",
+      "header_left": "01 - VOLUME",
+      "header_right": "UNITS SHIPPED",
+      "label": "UNITS SHIPPED - QUARTERLY",
+      "hero": "48.2",
+      "unit": "k",
+      "caption": "Up from 43.0k last quarter.",
+      "delta": "+12%",
+      "delta_label": "QUARTER ON QUARTER",
+      "side": {
+        "title": "What moved it",
+        "items": [
+          "Two new regional distributors",
+          "Faster restock on the core SKU"
+        ],
+        "aside": "( two causes )"
+      },
+      "bars": [
+        {
+          "label": "Q1",
+          "value": "43.0k",
+          "pct": 43.0,
+          "color": "inkB"
+        },
+        {
+          "label": "Q2",
+          "value": "48.2k",
+          "pct": 48.2,
+          "color": "inkA"
+        }
+      ],
+      "notes": "Volume grew 12% on two new distributors and a faster restock cycle on the core SKU."
+    },
+    {
+      "archetype": "grid",
+      "header_left": "02 - BENCHMARK",
+      "header_right": "US VS TWO RIVALS",
+      "title": "Where we stand",
+      "columns": [
+        {
+          "label": "Northwind",
+          "ours": true
+        },
+        {
+          "label": "Rival A"
+        },
+        {
+          "label": "Rival B"
+        }
+      ],
+      "row_h": 72,
+      "rows": [
+        {
+          "label": "Unit cost",
+          "cells": [
+            {
+              "text": "$18",
+              "size": 28,
+              "ours": true
+            },
+            {
+              "text": "$24",
+              "size": 24
+            },
+            {
+              "text": "$21",
+              "size": 24
+            }
+          ]
+        },
+        {
+          "label": "Lead time",
+          "cells": [
+            {
+              "text": "9 days",
+              "size": 17,
+              "display": false,
+              "ours": true
+            },
+            {
+              "text": "14 days",
+              "size": 17,
+              "display": false
+            },
+            {
+              "text": "11 days",
+              "size": 17,
+              "display": false
+            }
+          ]
+        },
+        {
+          "label": "Return rate",
+          "cells": [
+            {
+              "text": "1.4%",
+              "size": 28,
+              "ours": true
+            },
+            {
+              "text": "2.9%",
+              "size": 24
+            },
+            {
+              "text": "2.1%",
+              "size": 24
+            }
+          ]
+        }
+      ],
+      "note": "( three measures: cost - lead time - returns )",
+      "notes": "We are cheaper and faster than both rivals and our return rate is half of Rival A's."
+    },
+    {
+      "archetype": "divider",
+      "header_left": "ACT TWO",
+      "header_right": "WHAT WE FIX NEXT",
+      "index": "02",
+      "title": "The gap",
+      "title_en": "WHAT WE FIX NEXT",
+      "aside": "( two spreads: risk, plan )",
+      "notes": "Second act: the two things that could still cost us the year."
+    },
+    {
+      "archetype": "closing",
+      "header_left": "THANK YOU",
+      "header_right": "QUESTIONS",
+      "quote": "Ship the fix before the season turns.",
+      "target": "Target: 52k units, returns under 1%",
+      "big": "THANK YOU",
+      "sticker": "Q & A",
+      "notes": "Close on the target and invite questions."
+    }
+  ]
+}

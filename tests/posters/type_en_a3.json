@@ -1,0 +1,13 @@
+{
+  "artifact": "poster",
+  "canvas": {"preset": "a3_portrait"},
+  "family": "type_led",
+  "meta": {"lang": "en", "palette": "C", "seed": 17, "dialect": ["C", "A"]},
+  "content": {
+    "title": "MAKE SPACE",
+    "subtitle": "A workshop on working with constraints",
+    "body": "Bring a question, a notebook, and one idea you want to test. We will explore how a few rules can open up new possibilities.",
+    "cta": "Reserve your place",
+    "footer": "Workshop poster fixture"
+  }
+}

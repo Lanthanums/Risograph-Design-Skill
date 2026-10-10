@@ -1,0 +1,24 @@
+# Bytecode left behind by running the test suites
+__pycache__/
+state/
+*.py[cod]
+
+# Local renderer registration: render.py --register writes absolute paths
+# that only exist on the machine that ran it. See README "Rendering".
+scripts/render.json
+
+# Scratch output. Never commit generated decks, previews or QA reports:
+# the contract test asserts the package ships no finished example deck.
+deck/
+preview/
+*.pptx
+qa.json
+layout.json
+style.json
+media/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

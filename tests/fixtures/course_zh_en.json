@@ -1,0 +1,141 @@
+{
+  "meta": {
+    "title": "讲座讲义：从数据到论证",
+    "lang": "zh-en",
+    "scenario": "course",
+    "palette": "B",
+    "dialect": ["B", "A"],
+    "print_grammar": "light",
+    "seed": 3307,
+    "total": 5,
+    "media": "media",
+    "bg_manifest": "media/manifest.json",
+    "footer": "DATA TO ARGUMENT - LECTURE 04",
+    "header_right": "LECTURE 04",
+    "header_left": "讲座讲义"
+  },
+  "backgrounds": {
+    "1": {
+      "preset": "cover-bleed-bl"
+    },
+    "2": {
+      "preset": "corner-fade-tr-xs"
+    },
+    "3": {
+      "preset": "blob-corner-tl"
+    },
+    "4": {
+      "preset": "edge-fade-left"
+    },
+    "5": {
+      "reverse": true,
+      "preset": "reverse-circle-tr"
+    }
+  },
+  "expect": {
+    "reversed": [
+      5
+    ],
+    "archetypes": [
+      "statement",
+      "quote",
+      "timeline",
+      "venn",
+      "closing"
+    ],
+    "lang_marker": "zh-en"
+  },
+  "pages": [
+    {
+      "archetype": "statement",
+      "header_left": "讲座讲义",
+      "header_right": "LECTURE 04",
+      "lines": [
+        [
+          "数据不会自己变成论证。",
+          46
+        ],
+        [
+          "你要替它说话。",
+          46
+        ]
+      ],
+      "sticker": "04",
+      "body": "今天只讲一件事：从一张表走到一个论点，中间需要哪三步。",
+      "note": "本讲结构：观察 → 比较 → 归因。",
+      "aside": "( read: slowly )",
+      "notes": "开场定调：数据本身不构成论证，三步是观察、比较、归因。"
+    },
+    {
+      "archetype": "quote",
+      "header_left": "01 — 引语",
+      "header_right": "原文出处",
+      "lines": [
+        "「所有模型都是错的，",
+        "但有些是有用的。」"
+      ],
+      "size": 30,
+      "highlight": "所有模型都是错的",
+      "attribution": "George Box，1976",
+      "source": "QUOTED IN LECTURE 04 READER",
+      "notes": "用 Box 这句话说明：比较的标准比数据本身更重要。"
+    },
+    {
+      "archetype": "timeline",
+      "header_left": "02 — 流程",
+      "header_right": "三步法",
+      "title": "从表到论点的三步",
+      "subtitle": "每一步都要留下可以被反驳的痕迹。",
+      "items": [
+        {
+          "month": "1",
+          "unit": "观察",
+          "name": "先看分布",
+          "desc": "均值之前先看形状和离群点"
+        },
+        {
+          "month": "2",
+          "unit": "比较",
+          "name": "再定基准",
+          "desc": "和谁比，比哪个时间段"
+        },
+        {
+          "month": "3",
+          "unit": "归因",
+          "name": "最后下结论",
+          "desc": "写清楚什么证据会推翻它"
+        }
+      ],
+      "aside": "( three steps )",
+      "notes": "三步法：观察分布、确定比较基准、写下可被推翻的归因。"
+    },
+    {
+      "archetype": "venn",
+      "header_left": "03 — 图解",
+      "header_right": "两个条件",
+      "title": "什么才算一个论点",
+      "left": "可检验",
+      "right": "有取舍",
+      "centre": "论点",
+      "left_en": "TESTABLE",
+      "right_en": "CONSEQUENTIAL",
+      "gap_label": "常见毛病",
+      "gap_items": [
+        "只有描述，没有取舍",
+        "有取舍，却无法检验"
+      ],
+      "takeaway": "两个条件同时满足，才值得占用一页幻灯片。",
+      "notes": "论点必须同时可检验和有取舍，缺一个就只是描述。"
+    },
+    {
+      "archetype": "closing",
+      "header_left": "下课",
+      "header_right": "讨论",
+      "quote": "先写下会推翻你的证据。",
+      "target": "下次课：把上周的图表改成一个论点",
+      "big": "THANK YOU",
+      "sticker": "Q & A",
+      "notes": "布置作业：把上周的图表改写成可被推翻的论点。"
+    }
+  ]
+}

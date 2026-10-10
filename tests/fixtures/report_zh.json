@@ -1,0 +1,185 @@
+{
+  "meta": {
+    "title": "季度产品汇报",
+    "lang": "zh",
+    "scenario": "report",
+    "palette": "G",
+    "print_grammar": "light",
+    "seed": 2026,
+    "total": 5,
+    "media": "media",
+    "bg_manifest": "media/manifest.json",
+    "footer": "YANCHUAN NOTES - Q3 PRODUCT REVIEW",
+    "header_right": "Q3 产品汇报",
+    "header_left": "产品汇报"
+  },
+  "backgrounds": {
+    "1": {
+      "preset": "cover-bleed-tr"
+    },
+    "2": {
+      "preset": "corner-fade-br"
+    },
+    "3": {
+      "preset": "edge-fade-right"
+    },
+    "4": {
+      "reverse": true,
+      "preset": "reverse-blob-bl"
+    },
+    "5": {
+      "reverse": true,
+      "preset": "reverse-circle-tr"
+    }
+  },
+  "expect": {
+    "reversed": [
+      4,
+      5
+    ],
+    "archetypes": [
+      "cover",
+      "data",
+      "numbered",
+      "divider",
+      "closing"
+    ],
+    "lang_marker": "zh"
+  },
+  "pages": [
+    {
+      "archetype": "cover",
+      "header_left": "产品汇报",
+      "header_right": "Q3 产品汇报",
+      "question": [
+        "Q：",
+        "这一季度，用户真正留下来的原因是什么？"
+      ],
+      "title": "砚川",
+      "title_size": 122,
+      "title_en": "YANCHUAN",
+      "thesis": [
+        [
+          "留存升到 46%",
+          {
+            "bold": true
+          }
+        ],
+        [
+          "，付费转化同步上行。",
+          {}
+        ]
+      ],
+      "highlight": "留存升到 46%",
+      "sticker": "Q3",
+      "star": true,
+      "bullets": [
+        "经营数据",
+        "用户之声",
+        "竞品对比",
+        "Q4 规划"
+      ],
+      "subtitle": "砚川笔记（Yanchuan）—— 面向大学生的 AI 辅助笔记 App",
+      "aside": "( 2026 · Q3 )",
+      "notes": "开场：本季度最值得说的是留存和付费同时改善，而不是单看月活。"
+    },
+    {
+      "archetype": "data",
+      "header_left": "01 — 增长",
+      "header_right": "月活跃用户",
+      "label": "月活跃用户 · MONTHLY ACTIVE USERS",
+      "hero": "12.4",
+      "unit": " 万",
+      "hero_size": 148,
+      "caption": "较上季度的 8.1 万，净增 4.3 万。",
+      "delta": "+53%",
+      "delta_label": "QUARTER OVER QUARTER",
+      "side": {
+        "title": "增长的来源",
+        "items": [
+          "九月开学季的校园推广",
+          "「手写转文字」的口碑传播"
+        ],
+        "aside": "( two drivers )"
+      },
+      "bars": [
+        {
+          "label": "Q2",
+          "value": "8.1 万",
+          "pct": 8.1,
+          "color": "inkB"
+        },
+        {
+          "label": "Q3",
+          "value": "12.4 万",
+          "pct": 12.4,
+          "color": "inkA"
+        }
+      ],
+      "notes": "月活 12.4 万，环比 +53%，净增 4.3 万；增长来自开学季推广和手写转文字的口碑。"
+    },
+    {
+      "archetype": "numbered",
+      "header_left": "02 — 风险",
+      "header_right": "01 / 03 · 稳定性",
+      "title": "问题与风险",
+      "index": "01",
+      "hero": "1.8%",
+      "hero_size": 150,
+      "label": "安卓端崩溃率 · ANDROID CRASH RATE",
+      "gauge": {
+        "title": "与行业健康线对比",
+        "rows": [
+          {
+            "label": "行业健康线 1.0%",
+            "pct": 1.0,
+            "color": "inkB",
+            "value": "1.0%",
+            "scale": 120
+          },
+          {
+            "label": "砚川 1.8%",
+            "pct": 1.8,
+            "color": "inkA",
+            "value": "1.8%",
+            "scale": 120
+          }
+        ],
+        "aside": "( 健康线 = 1% )"
+      },
+      "takeaway": [
+        [
+          "高于行业 1% 的健康线，",
+          {}
+        ],
+        [
+          "是差评的主要来源。",
+          {
+            "bold": true
+          }
+        ]
+      ],
+      "notes": "安卓端崩溃率 1.8%，高于行业 1% 的健康线，是差评的主要来源。"
+    },
+    {
+      "archetype": "divider",
+      "header_left": "第二幕 · 用户与优势",
+      "header_right": "用户之声",
+      "index": "03",
+      "title": "用户之声",
+      "title_en": "WHAT USERS LOVE",
+      "aside": "( 调研 · 偏好 · 原话 )",
+      "notes": "第三章节：用户调研 2,160 份有效问卷给出的排序。"
+    },
+    {
+      "archetype": "closing",
+      "header_left": "谢谢",
+      "header_right": "提问",
+      "quote": "把 20 万月活，建在稳定的地基上。",
+      "target": "Q4 目标：月活 20 万 · 崩溃率 < 1%",
+      "big": "THANK YOU",
+      "sticker": "Q & A",
+      "notes": "收尾：Q4 的功课是把规模建立在稳定性上。"
+    }
+  ]
+}
