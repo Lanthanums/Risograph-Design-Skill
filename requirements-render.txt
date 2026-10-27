@@ -1,0 +1,2 @@
+-r requirements.txt
+PyMuPDF>=1.24,<2

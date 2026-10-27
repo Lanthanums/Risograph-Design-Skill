@@ -11,6 +11,8 @@ from pathlib import Path
 import random
 import sys
 sys.dont_write_bytecode=True
+from runtime import prepare
+prepare()
 sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 
 import compose
@@ -20,105 +22,153 @@ from poster_layouts import choose_family, compose_poster, FAMILIES, TEXT_ROLES
 import riso_kit as rk
 import textmetrics as tm
 import artifact_io as aio
+import graphic_recipes
 from poster_layouts import layout_options
 
 
-SCHEMA={'artifact':'poster','canvas':{'preset':'a3_portrait'},
-        'family':'type_led','meta':{'lang':'en','palette':'G','seed':1,'elements':True},
-        'layout':{'columns':'auto','structure':'rules','alignment':'l',
-                  'footer_anchor':'content','vertical_alignment':'balanced'},
-        'content':{'title':'YOUR SUPPLIED TITLE'}}
+from poster_contract import example,describe_spec
+SCHEMA=example()
 
 
 def normalize(spec,base_dir=None):
-    if not isinstance(spec,dict):raise ValueError('Poster spec must be a JSON object')
-    if 'spec' in spec:
+    from poster_contract import canonical
+    if isinstance(spec,dict) and 'spec' in spec:
         extra=set(spec)-{'spec','plan','families','text_roles','canvas_presets'}
-        if extra:raise ValueError(f'Unknown poster envelope fields: {sorted(extra)}')
+        if extra:raise ValueError('Unknown poster envelope fields: '+str(sorted(extra)))
         spec=spec['spec']
-    import copy
-    spec=copy.deepcopy(spec)
-    unknown=set(spec)-{'artifact','canvas','family','meta','content','layout','brief'}
-    if unknown:raise ValueError(f'Unknown poster fields: {sorted(unknown)}')
-    if spec.get('artifact','poster')!='poster':raise ValueError('Use build_deck.py for deck artifacts')
-    meta=spec.get('meta',{})
-    if not isinstance(meta,dict):raise ValueError('meta must be an object')
-    if 'layout' in spec and not isinstance(spec['layout'],dict):raise ValueError('layout must be an object')
-    forbidden={'chrome','header_left','header_right','footer','total'} & set(meta)
-    if forbidden or meta.get('print_grammar','none')!='none':
-        raise ValueError(f'Poster must not use deck chrome: {sorted(forbidden)}')
-    unknown=set(meta)-{'lang','palette','palette_hex','seed','dialect','elements','fonts','scale','reverse',
-                       'family','print_grammar','calibrated_from_reference','from_content','exclude_elements','element_pool','graphic_element'}
-    if unknown:raise ValueError(f'Unknown poster meta fields: {sorted(unknown)}')
-    if 'elements' in meta and not isinstance(meta['elements'],bool):
-        raise ValueError('meta.elements must be boolean')
-    forced=meta.get('dialect')
-    if forced is not None:
-        forced=[forced] if isinstance(forced,str) else forced
-        if not isinstance(forced,list) or not 1<=len(forced)<=2 or any(d not in compose.DIALECTS for d in forced):
-            raise ValueError('meta.dialect must name one or two dialects A-F')
+    spec,warnings=canonical(spec)
+    for warning in warnings:print('warning: '+warning)
+    meta=spec.get('meta',{});content=spec['content'];modern='art_direction' in spec
+    recipe=meta.get('graphic_recipe','auto');disabled=recipe in ('off','micro')
+    if recipe not in ('off','micro'):graphic_recipes.validate(recipe)
+    if recipe not in ('auto','off','micro'):
+        if meta.get('graphic_element'):raise ValueError('Choose graphic_recipe or graphic_element, not both')
+        if spec.get('layout',{}).get('graphic')=='none' or not meta.get('elements',True) or meta.get('element_pool')==[]:raise ValueError('graphic_recipe requires enabled elements and graphic band')
+        primary=graphic_recipes.RECIPES[recipe]['dialect'];forced=meta.get('dialect')
+        if forced and (forced if isinstance(forced,str) else forced[0])!=primary:raise ValueError('graphic_recipe conflicts with explicit primary dialect')
+        meta.setdefault('dialect',[primary]);spec['meta']=meta;spec['layout']=dict(spec.get('layout',{}),graphic='band')
+    if disabled and not modern:
+        meta['graphic_recipe']='auto';meta['elements']=False;spec['meta']=meta
     if not meta.get('elements',True) or meta.get('element_pool')==[]:
-        if spec.get('layout',{}).get('graphic')=='band' or meta.get('graphic_element'):
-            raise ValueError('graphic band/element requires enabled elements and a nonempty pool')
+        if spec.get('layout',{}).get('graphic')=='band' or meta.get('graphic_element'):raise ValueError('graphic band/element requires enabled elements and a nonempty pool')
         spec['layout']=dict(spec.get('layout',{}),graphic='none')
     if 'graphic_element' in meta:
-        if not isinstance(meta['graphic_element'],str) or meta['graphic_element'] not in compose.E.REGISTRY:
-            raise ValueError('Unknown meta.graphic_element')
-        if spec.get('layout',{}).get('graphic')=='none':
-            raise ValueError('graphic_element requires a graphic band')
+        if meta['graphic_element'] not in compose.E.REGISTRY:raise ValueError('Unknown meta.graphic_element')
+        if spec.get('layout',{}).get('graphic')=='none':raise ValueError('graphic_element requires a graphic band')
         spec['layout']=dict(spec.get('layout',{}),graphic='band')
-    content=spec.get('content',{})
-    if not isinstance(content,dict) or not isinstance(content.get('title'),str) or not content['title'].strip():
-        raise ValueError('Poster requires a supplied text title; never invent content')
-    known={'title','subtitle','body','blocks','date','venue','metadata','cta','key_number','quote',
-           'attribution','image','footer','data','text_bleed','full_bleed_reason','comparison','process'}
-    if set(content)-known:raise ValueError(f'Unknown poster content roles: {sorted(set(content)-known)}')
-    for key in ('blocks','data','comparison','process','text_bleed'):
-        if key in content and not isinstance(content[key],list):raise ValueError(f'content.{key} must be a list')
-    for i,block in enumerate(content.get('blocks',[])):
-        if not isinstance(block,(str,dict)):raise ValueError(f'content.blocks[{i}] must be text or an object')
-        if isinstance(block,dict) and set(block)-{'title','text'}:raise ValueError(f'Unknown content.blocks[{i}] fields')
-    for i,row in enumerate(content.get('data',[])):
-        if not isinstance(row,dict) or set(row)-{'label','value'}:raise ValueError(f'Invalid content.data[{i}] fields')
-    for key in ('comparison','process'):
-        for i,row in enumerate(content.get(key,[])):
-            if not isinstance(row,(str,dict)) or isinstance(row,dict) and set(row)-{'label','text'}:
-                raise ValueError(f'Invalid content.{key}[{i}] fields')
-    for key,fields in (('quote',{'text','attribution'}),('key_number',{'value','label'}),('image',{'path'})):
-        if isinstance(content.get(key),dict) and set(content[key])-fields:raise ValueError(f'Unknown content.{key} fields')
-    if content.get('full_bleed_reason') and not content.get('image'):
-        raise ValueError('Full bleed exception requires a supplied content image')
+    if content.get('chart') and (spec.get('family') or meta.get('family','explainer'))!='explainer':raise ValueError('content.chart requires family explainer')
+    if content.get('full_bleed_reason') and not content.get('image'):raise ValueError('Full bleed exception requires a supplied content image')
     if set(content.get('text_bleed',[]))-set(TEXT_ROLES):raise ValueError('Unknown text bleed role')
     if content.get('image'):
+        if recipe not in ('auto','off','micro'):raise ValueError('A supplied image occupies the graphic region; use graphic_recipe auto or remove the recipe')
         raw=content['image'];raw=raw.get('path') if isinstance(raw,dict) else raw
-        if not isinstance(raw,str):raise ValueError('content.image.path must be a file path')
         content['image']={'path':str(aio.input_path(raw,base_dir,'poster image'))}
-    if 'brief' in spec:
-        if not isinstance(spec['brief'],dict):raise ValueError('brief must contain provided constraints and sources')
-        extra=set(spec['brief'])-{'purpose','viewing_distance','audience','constraints','sources'}
-        if extra:raise ValueError(f'Unknown brief fields: {sorted(extra)}')
-    poster_canvas(spec.get('canvas'))
-    layout_options(spec.get('layout'))
-    choose_family(content,spec.get('family') or meta.get('family'),meta.get('seed',1))
+    poster_canvas(spec.get('canvas'));layout_options(spec.get('layout'));choose_family(content,spec.get('family') or meta.get('family'),meta.get('seed',1))
     return spec
+
+def decoration_plan(slide,result,meta,canvas,family,primary,secondary,seed):
+    if not meta.get('elements',True):return []
+    items=[]
+    audited={t['shape'].name:t for t in tm.audit(slide,mode='ink')}
+    for role in result['roles']:
+        pieces=[audited[n] for n in role['shapes'] if n in audited]
+        if not pieces:continue
+        rect=[min(t['rect'][0] for t in pieces),min(t['rect'][1] for t in pieces),
+              max(t['rect'][2] for t in pieces),max(t['rect'][3] for t in pieces)]
+        if any('riso-layer' in t['shape'].name for t in pieces):
+            rect[1]=min(rect[1],min(t['shape'].top.pt for t in pieces))
+            rect[3]=max(rect[3],max(t['shape'].top.pt+t['shape'].height.pt for t in pieces))
+        items.append({'rect':rect,'text':role['text'],'size':role['size']})
+    items.extend(compose.content_obstacles(slide,canvas))
+    return compose.plan_page(family,primary,secondary,'poster',random.Random(seed*31+7),
+                             items,canvas=canvas,exclusions=meta.get('exclude_elements',[]),
+                             candidates=meta.get('element_pool'),graphic_rect=result['graphic_rect'],
+                             graphic_element=meta.get('graphic_element'),graphic_recipe=meta.get('graphic_recipe','auto'))
 
 
 def plan(spec,base_dir=None):
     spec=normalize(spec,base_dir)
+    if 'art_direction' in spec:
+        import poster_direction
+        return {'spec':spec,'plan':poster_direction.make_plan(spec)}
     meta=spec.get('meta',{});content=spec['content'];seed=meta.get('seed',1)
     canvas=poster_canvas(spec.get('canvas'))
     family,why=choose_family(content,spec.get('family') or meta.get('family'),seed)
     theme=rk.Theme(palette=meta.get('palette','G'),palette_hex=meta.get('palette_hex'),
                    print_grammar='none',lang=meta.get('lang','en'),fonts=meta.get('fonts'))
     theme.on_red=bool(meta.get('reverse'))
-    result=compose_poster(None,content,theme,canvas,family,seed,
+    # Real editable shapes in memory: identical font/anchor geometry to build,
+    # without textures, files, directory creation or history writes.
+    prs=rk.new_deck(canvas);slide=rk.add_page(prs,None)
+    result=compose_poster(slide,content,theme,canvas,family,seed,
                           content.get('image',{}).get('path'),spec.get('layout'))
+    forced=meta.get('dialect')
+    if isinstance(forced,str):forced=[forced]
+    primary,secondary,why_dialect=compose.pick_dialects(
+        content['title']+' '+str(content.get('body','')),'poster',seed,compose.load_history(),forced,
+        self_key=('poster:'+content['title'],seed))
+    decor=decoration_plan(slide,result,meta,canvas,family,primary,secondary,seed)
+    placed=any(r.get('group')=='composition' for r in decor)
+    if result['graphic_rect'] and not placed:
+        if result['layout']['graphic']=='band':
+            raise ValueError('graphic band geometry rejected its elements during plan: no legal placement within quiet/area limits. '
+                             'Change graphic_position or use explainer for an information-led composition.')
+        # Remove an unusable reservation and reflow before build. No empty band.
+        effective=dict(spec.get('layout',{}),graphic='none')
+        prs=rk.new_deck(canvas);slide=rk.add_page(prs,None)
+        result=compose_poster(slide,content,theme,canvas,family,seed,
+                              content.get('image',{}).get('path'),effective)
+        result['graphic_reason']='automatic band rejected by placement limits; reflowed without empty band'
+        decor=decoration_plan(slide,result,meta,canvas,family,primary,secondary,seed)
+    import place_decor as pd
+    import layout as lay
+    items=[r['rect'] for r in tm.audit(slide,mode='ink')]
+    quiet=pd.largest_quiet([lay.inflate(r,pd.TEXT_PAD) for r in items]+[r['rect'] for r in decor],canvas)[0]
+    words=sum(pd.word_count(r['text']) for r in result['roles'])
+    floor=pd.TEXT_TIERS[pd.tier_of(words)]['quiet']
+    result.update(decoration_plan=decor,dialect={'primary':primary,'secondary':secondary,'chosen_by':why_dialect},
+                  quiet={'share':quiet,'floor':floor,'status':'pass' if quiet>=floor else 'review'},
+                  content_words=round(words,1))
+    safe=canvas.safe
+    content_roles=[r for r in result['roles'] if r['role'] not in ('footer','cta')]
+    edge=max([r['rect'][3] for r in content_roles]+[safe[1]])
+    if result.get('image_rect'):edge=max(edge,result['image_rect'][3])
+    if result.get('graphic_rect'):edge=max(edge,result['graphic_rect'][3])
+    last=max([r['rect'][3] for r in result['roles']]+[edge])
+    result['content_extent']={'body_ratio':round((edge-safe[1])/(safe[3]-safe[1]),3),
+                              'last_content_ratio':round((last-safe[1])/(safe[3]-safe[1]),3),
+                              'trailing_blank_pt':round(max(0,safe[3]-last),1)}
+    notes=[]
+    recipe_members=[d for d in decor if d.get('recipe')]
+    graphic_design={'requested':meta.get('graphic_recipe','auto'),
+                    'recipe':recipe_members[0]['recipe'] if recipe_members else None,
+                    'elements':[d['name'] for d in decor if d.get('group')=='composition'],
+                    'status':'composed' if recipe_members else 'single-motif' if placed else 'image' if result.get('image_rect') else 'unillustrated'}
+    result['graphic_design']=graphic_design
+    if not result.get('image_rect') and not recipe_members and meta.get('elements',True):
+        notes.append('Graphic craft review: '+('graphic:none disables the illustration region. ' if result['layout']['graphic']=='none' else '')+
+                     'Consider a deck-library graphic_recipe with lead, pattern and detail. Rules, process boxes and paper grain do not replace this decision.')
+    if result['content_extent']['body_ratio']<.8:
+        notes.append('Review composition: body ends before 80% of the safe height; intentional quiet space is allowed.')
+    if family=='explainer' and not (result.get('image_rect') or result.get('chart') or result.get('diagrams') or placed):
+        notes.append('Review visual concept: rules and text alone remain. Reserve a graphic/image region or add a source-grounded diagram.')
+    provenance=[]
+    for i,row in enumerate(content.get('chart',{}).get('items',[])):
+        record={k:row[k] for k in ('source','status','derivation') if k in row}
+        record.update(index=i,status=row.get('status','unspecified'))
+        provenance.append(record)
+        if record['status']!='supplied':notes.append(f'Chart item {i}: {record["status"]} provenance; check the source and keep derivations/qualifiers visible.')
+    result.update(review_notes=notes,chart_provenance=provenance)
     return {'spec':spec,'plan':{'family':family,'family_chosen_by':why,'canvas':canvas.to_dict(),
                               'brief':spec.get('brief',{}),'font_diagnostics':theme.font_diagnostics,
                               **result}}
 
 
 def build(spec,out_path,base_dir=None):
+    normalized=normalize(spec,base_dir)
+    if 'art_direction' in normalized:
+        import poster_direction
+        return poster_direction.build(normalized,out_path)
     planning=plan(spec,base_dir)
     spec=planning['spec']
     meta=spec.get('meta',{})
@@ -132,14 +182,8 @@ def build(spec,out_path,base_dir=None):
     media.mkdir(exist_ok=True)
     th=rk.Theme(palette=meta.get('palette','G'),palette_hex=meta.get('palette_hex'),
                 print_grammar='none',lang=meta.get('lang','en'),fonts=meta.get('fonts'))
-    forced=meta.get('dialect')
-    if isinstance(forced,str):
-        forced=[forced]
-    history=compose.load_history()
     title=str(content['title'])
-    primary,secondary,why=compose.pick_dialects(
-        title+' '+str(content.get('body','')),'poster',seed,history,forced,
-        self_key=('poster:'+title,seed))
+    primary,secondary,why=(planning['plan']['dialect'][k] for k in ('primary','secondary','chosen_by'))
     colors=meta.get('palette_hex').split(',') if meta.get('palette_hex') else mt.PALETTES[th.palette]
     ctx=mt.Ctx(canvas.width,canvas.height,meta.get('scale',1.5),colors)
     # Grain only by default; decorative fields are optional and must stay clear
@@ -177,39 +221,22 @@ def build(spec,out_path,base_dir=None):
     prs=rk.new_deck(canvas)
     slide=rk.add_page(prs,str(bg_path))
     slide.shapes[0].name='riso-paper[background]'
-    result=compose_poster(slide,content,th,canvas,family,seed,image_path,spec.get('layout'))
+    result=compose_poster(slide,content,th,canvas,family,seed,image_path,planning['plan']['layout'])
     records=[]
     if meta.get('elements',True):
-        items=[]
-        audited={t['shape'].name:t for t in tm.audit(slide,mode='ink')}
-        for role in result['roles']:
-            pieces=[audited[n] for n in role['shapes'] if n in audited]
-            if not pieces:continue
-            rect=[min(t['rect'][0] for t in pieces),min(t['rect'][1] for t in pieces),
-                  max(t['rect'][2] for t in pieces),max(t['rect'][3] for t in pieces)]
-            # A multiline display is one anchor, including both print layers.
-            # Reserve its line frames too: renderer baselines can differ from
-            # FreeType ink bounds, so accents must not sit inside display lines.
-            if any('riso-layer' in t['shape'].name for t in pieces):
-                rect[1]=min(rect[1],min(t['shape'].top.pt for t in pieces))
-                rect[3]=max(rect[3],max(t['shape'].top.pt+t['shape'].height.pt for t in pieces))
-            items.append({'rect':rect,'text':role['text'],'size':role['size']})
-        if result['image_rect']:
-            items.append({'rect':result['image_rect'],'text':'','size':0})
-        for diagram in result['diagrams']:
-            items.extend({'rect':node,'text':'','size':0} for node in diagram['nodes'])
-        decor_plan=compose.plan_page(family,primary,secondary,'poster',random.Random(seed*31+7),
-                               items,canvas=canvas,exclusions=meta.get('exclude_elements',[]),candidates=meta.get('element_pool'),
-                               graphic_rect=result['graphic_rect'],graphic_element=meta.get('graphic_element'))
+        decor_plan=planning['plan']['decoration_plan']
         records=compose.apply_plan(slide,decor_plan,th,str(media/'el'),seed=seed)
+        expected_parts=[r for r in decor_plan if r.get('recipe')]
+        rendered_parts=[r for r in records if r.get('recipe') and 'error' not in r]
+        if len(rendered_parts)!=len(expected_parts):
+            raise ValueError('Graphic recipe rendering failed; incomplete group is not a completed poster')
         if result['graphic_rect'] and not any(r.get('group')=='composition' and 'error' not in r for r in records):
             if result['layout']['graphic']=='band':
                 raise ValueError('Required graphic band could not be populated; change element pool/position or reallocate content')
             print('Poster graphic unplaced: review the pool, quiet space and graphic position.',file=sys.stderr)
         for rec in records:
             rec['page']=1
-    prs.save(str(out))
-    aio.canonical_pptx(out)
+    aio.save_pptx(prs,out)
     poster_policy={'family':family,'family_chosen_by':why_family,
                    'background_sha256':hashlib.sha256(bg_blob).hexdigest(),
                    'protagonist':result['protagonist'],'roles':result['roles'],
@@ -219,7 +246,11 @@ def build(spec,out_path,base_dir=None):
                    'reading_order':result['reading_order'],'role_demotions':result['role_demotions'],
                    'layout':result['layout'],'vertical_shift':result['vertical_shift'],
                    'diagrams':result['diagrams'],'brief':spec.get('brief',{}),
-                   'graphic':{'region':result['graphic_rect'],'reason':result['graphic_reason'],
+                   'capacity':result.get('capacity',{}),'chart':result.get('chart'),'quiet_plan':planning['plan']['quiet'],
+                   'content_extent':planning['plan']['content_extent'],'review_notes':planning['plan']['review_notes'],
+                   'chart_provenance':planning['plan']['chart_provenance'],
+                   'graphic_design':planning['plan']['graphic_design'],
+                   'graphic':{'region':result['graphic_rect'],'reason':planning['plan']['graphic_reason'],
                               'placed':any(r.get('group')=='composition' and 'error' not in r for r in records)}}
     style={'skill':'riso-slides','artifact':'poster','title':title,'canvas_spec':canvas.to_dict(),
            'scenario':'poster','seed':seed,'lang':th.lang,'fonts':th.fonts,'font_diagnostics':th.font_diagnostics,
@@ -244,6 +275,7 @@ def main():
     ap.add_argument('--describe-spec',action='store_true')
     ap.add_argument('--plan',action='store_true')
     ap.add_argument('--summary',action='store_true',help='compact planning diagnostics; use with --plan (not a reusable spec)')
+    ap.add_argument('--verbose',action='store_true')
     ap.add_argument('--render',action='store_true',help='export PNG/PDF when a renderer is available')
     args=ap.parse_args()
     if args.summary and not args.plan:ap.error('--summary requires --plan')
@@ -251,10 +283,7 @@ def main():
         print(json.dumps(SCHEMA,indent=2))
         return 0
     if args.describe_spec:
-        print(json.dumps({'example':SCHEMA,'families':FAMILIES,'text_roles':TEXT_ROLES,
-                          'canvas_presets':POSTER_PRESETS,'layout':layout_options(),
-                          'optional_top_level':['brief'],'optional_content':['blocks','comparison','process','image','quote','key_number'],
-                          'asset_paths':'relative to spec file','plan':'reusable spec/plan envelope; no output or state writes'},indent=2))
+        print(json.dumps(describe_spec(),ensure_ascii=False,indent=2))
         return 0
     if not args.spec or (not args.out and not args.plan):
         ap.error('--spec and --out are required for build; --plan requires only --spec')
@@ -262,8 +291,15 @@ def main():
         result=plan(json.loads(Path(args.spec).read_text(encoding='utf-8')),Path(args.spec).resolve().parent)
         if args.summary:
             p=result['plan']
-            result={k:p[k] for k in ('family','canvas','font_diagnostics','layout','graphic_rect','graphic_reason','protagonist')}
-            result['roles']=[{k:r[k] for k in ('role','size','rect')} for r in p['roles']]
+            if p.get('version') in ('3.3','3.4','3.5','3.6'):
+                print(json.dumps({k:v for k,v in p.items() if k not in ('objects','content_roles')},ensure_ascii=False,indent=2))
+                return 0
+            result={k:p[k] for k in ('family','canvas','font_diagnostics','layout','graphic_rect','graphic_reason','protagonist','quiet','content_words')}
+            result['capacity']=p.get('capacity',{})
+            result['canvas']={k:p['canvas'][k] for k in ('width','height')}
+            result['decoration']=[d['name'] for d in p['decoration_plan']]
+            result['type_sizes']={role:sorted(set(round(r['size'],1) for r in p['roles'] if r['role']==role)) for role in dict.fromkeys(r['role'] for r in p['roles'])}
+            for k in ('content_extent','review_notes','chart_provenance','graphic_design'):result[k]=p[k]
         print(json.dumps(result,ensure_ascii=False,indent=2))
         return 0
     path=build(json.loads(Path(args.spec).read_text(encoding='utf-8')),args.out,

@@ -28,7 +28,7 @@ renderers. Compare PNG and full PPTX bytes across repeated seeded builds.
 - Hide decoration mentally: hierarchy must already work. Explain each element's
   function. Judge whether print texture, strokes, and offsets look deliberate.
 - For posters, check the intended image/diagram/graphic actually appears and
-  contributes to the composition. Review `poster.graphic` and element errors;
+  contributes to the composition. Review `graphic_design.status` and named recipe errors;
   texture alone is not a substitute. A pure-type choice should be deliberate.
 - Review deck pacing across pages; adjacent equal archetypes can be legitimate.
   Check poster title/quote/number readability at the intended viewing distance.
@@ -36,6 +36,11 @@ renderers. Compare PNG and full PPTX bytes across repeated seeded builds.
   actual foreground/background contrast. Review in the target app when possible.
 
 ## Deliver
+
+For an illustrated poster, review `graphic_design` and actual patterns at normal
+size. The native poster recipe vocabulary should contribute a coherent visual group, not only
+one generic symbol. Explain any intentional single-motif/typographic choice;
+do not mistake geometric QA or process boxes for completion of the visual brief.
 
 Editable PPTX, content spec, `<stem>.style.json`, `<stem>-media/manifest.json`, QA/layout reports,
 available PNG and PDF. Explain palette and content-density choices briefly.

@@ -6,6 +6,7 @@ import tempfile
 import hashlib
 import json
 import warnings
+import uuid
 from pathlib import Path
 
 
@@ -61,7 +62,10 @@ def read_json(name,default=None):
 
 def _atomic_write(path,payload):
     path.parent.mkdir(parents=True,exist_ok=True)
-    fd,staging=tempfile.mkstemp(prefix='riso-',suffix='.json',dir=path.parent)
+    # CPython tempfile retries PermissionError on Windows directories. A UUID
+    # with exclusive creation gives one bounded attempt, including sandbox denial.
+    staging=path.parent / ('riso-'+uuid.uuid4().hex+'.json')
+    fd=os.open(staging,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
     try:
         with os.fdopen(fd,'w',encoding='utf-8') as fh:
             json.dump(payload,fh,ensure_ascii=False,indent=2)

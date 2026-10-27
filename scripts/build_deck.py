@@ -27,7 +27,7 @@ Placeholders below show shape, not copy — never lift wording from this docstri
     "notes_default": ""
   },
   "pages": [
-    {"archetype": "cover",  "question": ["Q：", "..."], "title": "...", "title_en": "...",
+    {"archetype": "cover", "notes": "Full supplied script for this page",  "question": ["Q：", "..."], "title": "...", "title_en": "...",
      "thesis": [["bold part", {"bold": true}], [" rest", {}]],
      "highlight": "bold part", "sticker": "Q3",
      "bullets": ["section one", "section two"], "aside": "( 2026 )"},
@@ -73,6 +73,8 @@ import os
 import sys
 
 sys.dont_write_bytecode = True
+from runtime import prepare
+prepare()
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import riso_kit as rk
@@ -196,7 +198,7 @@ def p_cover(s, spec, th, idx, total, meta):
 def p_divider(s, spec, th, idx, total, meta):
     x0, y0, x1, y1 = SAFE
     # a divider is meant to be reversed; if it is not, its type must be ink
-    ink = th.paper if th.on_red else th.text
+    ink = th.display_ink
     stack(s, x0, y0 + 34, 500, 210,
           [(spec.get("index", "01"), th.f_display, spec.get("index_size", 168), False)],
           th, front=ink, back=th.back_ink, mid=None if not th.on_red else th.ink_deep,
@@ -242,8 +244,8 @@ def p_data(s, spec, th, idx, total, meta):
         for i, item in enumerate(side_items):
             rect(s, 600, yy + 6, 8, 8, fill=th.inkA)
             remain=len(side_items)-i
-            height=(side_end-yy-8*(remain-1))/remain
-            measured=fitted_text(s,item,th,620,yy,292,height,19,16,'data side item',i)
+            item_height=(side_end-yy-8*(remain-1))/remain
+            measured=fitted_text(s,item,th,620,yy,292,item_height,19,16,'data side item',i)
             yy+=measured.height+8
         dashed(s,600,yy+4,x1,yy+4,th.text)
         if side.get("aside"):
@@ -290,7 +292,7 @@ def p_features(s, spec, th, idx, total, meta):
         yy = y0 + 120 + i * row_h
         # label, bar and value each get their own band or column: sharing a band
         # is what put the value label on top of the row label
-        body(s, 430, yy - 10, 300, 24, [r["label"]], th, size=19)
+        fitted_text(s,r['label'],th,430,yy-10,300,38,spec.get('row_label_size',19),16,'features row label',i)
         # bars are right-aligned inside the row column: extending them left from
         # x=430 ran them into the hero label on the other side of the page
         w = int(bar_w * r["pct"] / float(spec.get("row_scale", 41)))
@@ -358,6 +360,10 @@ def p_grid(s, spec, th, idx, total, meta):
     top=y0+88
     row_h=spec.get('row_h',72)
     rows=spec.get('rows',[])
+    required=top+34+len(rows)*row_h+(48 if spec.get('note') else 0)
+    if required>y1:
+        raise ValueError(f'grid: {len(rows)} rows at {row_h:g}pt need {required-top:.1f}pt in {y1-top:.1f}pt; '
+                         'reduce row_h or allocate the supplied rows across pages before adding a note')
     for i,c in enumerate(cols):
         if c.get('ours'):
             rect(s,xs[i],top+30,widths[i]-8,row_h*len(rows)+4,fill=th.inkA,alpha=12)
@@ -432,10 +438,10 @@ def p_numbered(s, spec, th, idx, total, meta):
             fitted_text(s,gauge['aside'],th,600,bottom+4,312,26,13,13,'gauge aside')
     yy=y0+360
     if spec.get('takeaway'):
-        f=fitted_text(s,spec['takeaway'],th,x0,yy,x1-x0,y1-yy,22,16,'numbered takeaway')
+        f=fitted_text(s,spec['takeaway'],th,600,yy,312,y1-yy,22,16,'numbered takeaway')
         yy+=f.height+8
     if spec.get('support'):
-        fitted_text(s,spec['support'],th,x0,yy,x1-x0,y1-yy,16,16,'numbered support')
+        fitted_text(s,spec['support'],th,600,yy,312,y1-yy,16,16,'numbered support')
 
 
 def p_timeline(s, spec, th, idx, total, meta):
@@ -567,11 +573,53 @@ def p_closing(s, spec, th, idx, total, meta):
                 fill=th.paper,line=th.ink,color=th.inkA)
 
 
+def p_infographic(slide, spec, th, idx, total, meta):
+    """The same native evidence primitives and glyphs as the poster route."""
+    from infographic import make_plan
+    from poster_direction import draw
+    if spec.get('chart_backend','shapes')!='shapes':raise ValueError('native charts are not validated; use chart_backend: shapes')
+    direction=dict(spec.get('art_direction',{}));ladder=meta.get('type_scale',{})
+    direction.setdefault('body_size',ladder.get('body',20));direction.setdefault('title_size',ladder.get('title',44))
+    direction.setdefault('dialect',meta.get('evidence_dialect','swiss'));direction.setdefault('columns',min(2,len(spec['modules'])))
+    direction['autofit']=False
+    modules=__import__('copy').deepcopy(spec['modules'])
+    title=spec['title']
+    charts=[m for m in modules if m.get('visual') in ('bar-compare','bar-vertical','line-chart','ring','stacked-bar')]
+    if len(charts)==1:
+        unit=charts[0].get('visual_data',{}).get('unit','')
+        if unit and unit.lower() not in title.lower():title+=' ('+unit+')'
+        charts[0]['render_unit_heading']=False
+    for m in modules:
+        if m.get('headline')==spec['title']:m['render_heading']=False
+    candidate=dict(content=dict(title=title,modules=modules),
+                        canvas=dict(width=PAGE_W,height=PAGE_H,safe=list(SAFE)),
+                        meta=dict(lang=meta.get('lang','en'),fonts=meta.get('fonts'),seed=meta.get('seed',1)),
+                        evidence=spec.get('evidence',{}),art_direction=direction)
+    try:plan=make_plan(candidate)
+    except ValueError:
+        # Same measured writer and 18pt floor; copy and module count stay intact.
+        if direction['body_size']<=18:raise
+        direction['body_size']=18;plan=make_plan(candidate)
+        plan['autofit']['changes'].append('Deck body fitted to 18pt readability floor after measuring the requested ladder')
+    plan['source_modules']=spec['modules']
+    mapping={plan['ink_plan']['main'][0]:th.inkA,plan['ink_plan']['main'][1]:th.inkB,
+             plan['ink_plan']['body']:th.text,plan['ink_plan']['accent']:th.accent1,
+             plan['ink_plan']['paper']:th.paper}
+    for o in plan['objects']:
+        for key in ('color','fill','line','background'):
+            if o.get(key) in mapping:o[key]=mapping[o[key]]
+        for key in ('color','fill','line'):
+            if o.get(key) and o[key] not in th.t.values():th.t['evidence-'+str(len(th.t))]=o[key]
+    draw(slide,plan,th)
+    if not hasattr(th,'evidence_pages'):th.evidence_pages=[]
+    th.evidence_pages.append(dict(page=idx,plan=plan))
+
+
 ARCHETYPES = {
     "cover": p_cover, "divider": p_divider, "data": p_data,
     "features": p_features, "quote": p_quote, "grid": p_grid, "venn": p_venn,
     "numbered": p_numbered, "timeline": p_timeline, "ask": p_ask,
-    "statement": p_statement, "closing": p_closing,
+    "statement": p_statement, "closing": p_closing, "infographic": p_infographic,"chart":p_infographic,"versus":p_infographic,
 }
 
 
@@ -604,7 +652,29 @@ def write_style(out_path, spec, theme, manifest, extra=None):
     return aio.write_style(out_path,style)
 
 
+def check(spec):
+    """Measure every page in memory; return all page failures in one call."""
+    meta=spec.get('meta',{})
+    theme=Theme(palette=meta.get('palette','G'),palette_hex=meta.get('palette_hex'),
+                lang=meta.get('lang','zh'),fonts=meta.get('fonts'),print_grammar=meta.get('print_grammar','light'))
+    results=[]
+    for i,page in enumerate(spec.get('pages',[]),1):
+        prs=new_deck();slide=add_page(prs,None)
+        arch=page.get('archetype','data')
+        try:
+            if arch not in ARCHETYPES:raise ValueError(f'unknown archetype {arch!r}')
+            theme.on_red=bool(page.get('reverse',arch in ('divider','closing')))
+            (p_infographic if page.get('modules') and arch!='divider' else ARCHETYPES[arch])(slide,page,theme,i,len(spec['pages']),meta)
+            results.append({'page':i,'archetype':arch,'ok':True,'slots':[
+                {'role':t['shape'].name,'rect':[round(v,1) for v in t['rect']]} for t in tm.audit(slide)]})
+        except (ValueError,KeyError,TypeError) as exc:
+            results.append({'page':i,'archetype':arch,'ok':False,'error':str(exc)})
+    return {'ok':bool(results) and all(r['ok'] for r in results),'pages':results}
+
+
 def build(spec, out_path, base_dir=None):
+    import metric_cache
+    metric_cache.enable()
     if spec.get("artifact", "deck") != "deck":
         raise ValueError("Use build_poster.py for artifact=poster")
     meta = spec.get("meta", {})
@@ -617,8 +687,6 @@ def build(spec, out_path, base_dir=None):
     source=None
     if meta.get('media'):
         source=aio.input_path(meta['media'],base_dir,'deck media',directory=True)
-    elif (Path(base_dir or Path.cwd())/'media').is_dir():
-        source=(Path(base_dir or Path.cwd())/'media').resolve()
     if source is not None:
         if source!=media:
             shutil.copytree(source,media,dirs_exist_ok=True)
@@ -628,16 +696,17 @@ def build(spec, out_path, base_dir=None):
         # existing external background plans remain supported unchanged.
         import make_textures as mt
         colors=meta.get('palette_hex').split(',') if meta.get('palette_hex') else mt.PALETTES[th.palette]
-        ctx=mt.Ctx(PAGE_W,PAGE_H,1.5,colors)
+        ctx=mt.Ctx(PAGE_W,PAGE_H,2,colors)
         records=[]
         import hashlib
-        for i,_ in enumerate(spec.get('pages',[]),1):
-            bg,_=mt.render_page(ctx,{'paper_only':True,'registration_marks':False},meta.get('seed',1),i)
-            bg_path=media/f'bg{i}.jpg';mt.save_img(bg,str(bg_path),'jpg',90)
+        for i,page in enumerate(spec.get('pages',[]),1):
+            reverse=bool(page.get('reverse',page.get('archetype') in ('divider','closing')))
+            bg,_=mt.render_page(ctx,{'paper_only':True,'registration_marks':False,'reverse':reverse},meta.get('seed',1),i)
+            bg_path=media/f'bg{i}.jpg';mt.save_img(bg,str(bg_path),'jpg',70)
             blob=bg_path.read_bytes()
-            records.append({'page':i,'file':bg_path.name,'reversed':False,'bytes':len(blob),
+            records.append({'page':i,'file':bg_path.name,'reversed':reverse,'bytes':len(blob),
                             'sha256':hashlib.sha256(blob).hexdigest()[:16],**mt.ink_stats(bg)})
-        manifest={'palette':th.palette,'tokens':th.t,'pages':records,'total_bytes':sum(r['bytes'] for r in records)}
+        manifest={'palette':th.palette,'tokens':th.t,'scale':2,'recommended_render_width':1920,'pages':records,'total_bytes':sum(r['bytes'] for r in records)}
         (media/'manifest.json').write_text(json.dumps(manifest),encoding='utf-8')
     manifest_path=aio.input_path(meta['bg_manifest'],base_dir,'background manifest') if meta.get('bg_manifest') else media/'manifest.json'
     if manifest_path.exists():
@@ -662,6 +731,7 @@ def build(spec, out_path, base_dir=None):
     primary, secondary, why = compose.pick_dialects(
         blob, scenario, meta.get("seed", 1), history, forced,
         self_key=(meta.get("title", ""), meta.get("seed")))
+    meta=dict(meta,evidence_dialect=meta.get('evidence_dialect',{'A':'collage','B':'doodle','C':'swiss'}.get(primary,'swiss')))
     density = compose.DENSITY.get(scenario,
                                   compose.DENSITY[compose.DEFAULT_SCENARIO])
     density_level = compose.infer_density(scenario, meta.get("density"))
@@ -692,6 +762,7 @@ def build(spec, out_path, base_dir=None):
                items=chrome_items,
                right_cap=800.0 if arch == "cover" and page.get("sticker")
                else None)
+        (p_infographic if page.get('modules') and arch!='divider' else ARCHETYPES[arch])(slide, page, th, i, total, meta)
         # Measure the actual furniture before protecting its background. A
         # footer number must not inherit the corner dot field beneath it.
         from PIL import Image
@@ -717,7 +788,6 @@ def build(spec, out_path, base_dir=None):
                                   **mt.ink_stats(washed))
         picture = slide.shapes.add_picture(background, Pt(0), Pt(0), prs.slide_width, prs.slide_height)
         slide.shapes._spTree.insert(2, picture._element)
-        ARCHETYPES[arch](slide, page, th, i, total, meta)
         set_notes(slide, page.get("notes", meta.get("notes_default", "")))
         if want_elements:
             # pass the audit records, not bare rects: run sizes tell plan_page
@@ -747,8 +817,7 @@ def build(spec, out_path, base_dir=None):
     if manifest:
         manifest['total_bytes'] = sum(p.get('bytes', 0) for p in manifest['pages'])
         (media/'manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
-    prs.save(out_path)
-    aio.canonical_pptx(out_path)
+    aio.save_pptx(prs,out_path)
     write_style(out_path, spec, th, manifest, {
         "dialect": {"primary": primary, "secondary": secondary, "chosen_by": why,
                     "name": f"{compose.DIALECTS[primary]['name']} + "
@@ -759,6 +828,7 @@ def build(spec, out_path, base_dir=None):
         "elements": deck_records,
         "grammar": th.grammar,
         "rhythm_plan": compose.plan_rhythm(pages),
+        "evidence_pages":getattr(th,'evidence_pages',[]),
     })
     aio.legacy_media_alias(out_path)
     compose.append_history(skill_dir, {
@@ -777,9 +847,13 @@ def main():
     ap.add_argument("--spec", help="path to the deck JSON spec")
     ap.add_argument("--out", help="output .pptx path")
     ap.add_argument("--schema", action="store_true", help="print the spec schema")
+    ap.add_argument('--check',action='store_true',help='measure all pages in memory without textures/files/state')
+    ap.add_argument('--verbose',action='store_true')
     ap.add_argument("--design-system", action="store_true",
                     help="print the frozen design system as JSON "
                          "(colours, type scale, offsets, decoration, dot presets)")
+    ap.add_argument('--content-plan')
+    ap.add_argument('--skip-plan',action='store_true')
     args = ap.parse_args()
     if args.schema:
         print(__doc__.split("Spec\n----", 1)[1].strip())
@@ -787,9 +861,15 @@ def main():
     if args.design_system:
         print(json.dumps(rk.design_system(), ensure_ascii=False, indent=2))
         return 0
-    if not args.spec or not args.out:
+    if not args.spec or (not args.out and not args.check):
         ap.error("--spec and --out are required (or use --schema / --design-system)")
     spec = json.load(open(args.spec, encoding="utf-8"))
+    from content_plan import gate
+    gate(spec,args.content_plan,args.skip_plan,args.spec)
+    if args.check:
+        result=check(spec)
+        print(json.dumps(result,ensure_ascii=False,indent=2))
+        return 0 if result['ok'] else 2
     path = build(spec, args.out, Path(args.spec).resolve().parent)
     print(f"saved: {path}")
     return 0

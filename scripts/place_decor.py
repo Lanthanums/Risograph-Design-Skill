@@ -293,7 +293,9 @@ class Placer:
             aspect=(lw+hw)/max(lh+hh,1)
             target=min(self.page_area*.065,self.area_cap*self.page_area*.55,rw*rh*.65)
             w=math.sqrt(target*aspect);h=w/aspect
-            factor=min(1,rw*.72/w,rh*.88/h)
+            # Keep real headroom for neighboring rules plus the rotation guard;
+            # filling 88% rejected an otherwise legal explainer band by ~1pt.
+            factor=min(1,rw*.72/w,rh*.80/h)
             w*=factor;h*=factor
             if w*h<self.page_area*.015:
                 continue

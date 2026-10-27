@@ -40,6 +40,8 @@ import os
 import random
 import sys
 sys.dont_write_bytecode = True
+from runtime import prepare
+prepare()
 from canvas import DECK_CANVAS
 
 import numpy as np
@@ -86,16 +88,19 @@ class Ctx:
          self.acc1, self.acc2) = [hex2rgb(c) for c in palette]
         # Derived riso colours.
         #
-        # The three-layer title stack is defined in terms of ink A only, never
-        # as "deep ink / light ink / charcoal": that reading is unbuildable in
-        # any palette whose second ink is the ink black (G: inkB == ink),
-        # because there is no lighter ink to put in the middle. Ink A works for
-        # every palette:  back = ink_deep (ink A pushed toward the ink black),
-        #                 middle = inkA (the identity colour), front = ink.
+        # Keep overprint roles distinct from v3.1's tonal display plates below.
         self.inkAB = multiply(self.inkA, self.inkB)     # texture / overprint areas
         self.ink_deep = blend(self.inkA, self.ink, 0.45)  # type stack, back layer
         self.tintA = blend(self.inkA, self.paper, 0.45)   # wash / low-emphasis ink A
         self.tintB = blend(self.inkB, self.paper, 0.28)
+        import colorsys
+        hue=colorsys.rgb_to_hsv(*(v/255 for v in self.inkA))[0]
+        title_base=self.inkA
+        if hue<.12:
+            title_base=self.inkB if max(self.inkB)-min(self.inkB)>25 else self.acc2
+        self.title_front=blend(title_base,self.ink,.82)
+        self.title_mid=blend(title_base,self.paper,.84)
+        self.title_back=blend(title_base,self.paper,.54)
 
     def u(self, v):
         return int(round(v * self.s))
@@ -107,6 +112,8 @@ class Ctx:
             "accent1": rgb2hex(self.acc1), "accent2": rgb2hex(self.acc2),
             "inkAB": rgb2hex(self.inkAB), "ink_deep": rgb2hex(self.ink_deep),
             "tintA": rgb2hex(self.tintA), "tintB": rgb2hex(self.tintB),
+            "title_front":rgb2hex(self.title_front),"title_mid":rgb2hex(self.title_mid),
+            "title_back":rgb2hex(self.title_back),
         }
 
 
@@ -475,7 +482,7 @@ def parse_plan(text):
             elif part in PATTERN_NAMES:
                 entry["pattern"] = part
             else:
-                raise SystemExit(f"unknown plan token {part!r} on page {page_s}")
+                raise SystemExit(f"unknown plan token {part!r} on page {page_s}; use reverse, preset:NAME, or one of {list(PATTERN_NAMES)}; run plan-schema")
         plan[int(page_s)] = entry
     return plan
 
@@ -812,7 +819,7 @@ def main():
     bg.add_argument("--page-size", default="960x540")
     bg.add_argument("--scale", type=float, default=2)
     bg.add_argument("--format", default="jpg", choices=["png", "jpg"])
-    bg.add_argument("--quality", type=int, default=90)
+    bg.add_argument("--quality", type=int, default=70)
     bg.add_argument("--chrome-set", dest="chrome_set",
                     choices=["full", "light", "none"], default=None,
                     help="wash out the label zones of this chrome set (rule E)")
@@ -836,6 +843,16 @@ def main():
     pr = sub.add_parser("presets", help="list the calibrated field presets")
     pr.add_argument("--json", action="store_true")
     pr.set_defaults(func=cmd_presets)
+    schema=sub.add_parser('plan-schema',help='print background plan fields and enum values')
+    schema.set_defaults(func=lambda args: print(json.dumps({
+        'pages':{'1':{'reverse':False,'presets':[], 'quiet_zones':[], 'registration_marks':False}},
+        'fields':{'presets':'list of preset names','pattern':list(PATTERN_NAMES),'reverse':'boolean',
+                  'dot_ink':['A','B'],'circles':'list of [x,y,r,ink A/B or hex]',
+                  'quiet_zones':'list of [x0,y0,x1,y1] in points',
+                  'field':{'c':'[x,y] points','dir':'[dx,dy]','n':32,'spacing':13,'rmax':5,
+                           'falloff':200,'jitter':.25,'alpha':130,'radius':'optional radius in points'}},
+        'preset_names':list(FIELD_PRESETS),'inline':'1:preset:cover-bleed-tr,4:reverse+preset:reverse-circle-br',
+        'recommended':{'scale':2,'quality':70}},indent=2)))
 
     args = p.parse_args()
     if not hasattr(args, "palette"):

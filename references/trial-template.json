@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "calls": [],
+  "failures": [
+    {
+      "call_index": null,
+      "error": "",
+      "cause": "",
+      "calls_to_resolve": null,
+      "skill_defect": false
+    }
+  ],
+  "doc_mismatch": [],
+  "deviations": [],
+  "engine_seconds": null,
+  "wall_seconds": null,
+  "call_count": null,
+  "profile": {
+    "planning": "synchronous; no render",
+    "rendering": "external render required: command timeout too short",
+    "review": "human image inspection required; do not claim visual approval",
+    "capabilities": {
+      "can_view_images": false,
+      "command_timeout_seconds": 60,
+      "background_jobs": false
+    }
+  },
+  "independent_agent": false
+}

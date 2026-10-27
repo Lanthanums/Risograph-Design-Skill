@@ -21,6 +21,8 @@ import os
 import re
 import sys
 sys.dont_write_bytecode = True
+from runtime import prepare
+prepare()
 
 import numpy as np
 from PIL import Image
@@ -237,6 +239,13 @@ def geometry_checks(rep, slide, i, args, canvas=None):
     """
     canvas = canvas or getattr(args, "canvas", DECK_CANVAS)
     PAGE_W, PAGE_H = canvas.width, canvas.height
+    art=(getattr(args,'style',{}).get('poster') or {}).get('art_direction')
+    if canvas.artifact=='poster' and art:
+        from poster_review import check_slide
+        result=check_slide(slide,i,canvas,art)
+        for failure in result['fails']:rep.add(False,'poster art geometry',failure,i)
+        for warning in result['warns']:rep.add(False,'poster art composition',warning,i,'warn')
+        return result
     texts = tm.audit(slide)
     for issue in lay.measured_issues(slide):
         rep.add(False,'measured line/circle geometry',issue,i)
@@ -430,6 +439,7 @@ def structural(rep, deck, media, spec, args):
         rep.add(True, "poster canvas", f"{PAGE_W:.2f}x{PAGE_H:.2f}pt")
 
     allowed = set(NEUTRALS)
+    allowed |= {v.lstrip('#').upper() for v in getattr(args,'style',{}).get('palette',{}).get('tokens',{}).values()}
     if media:
         mf = os.path.join(media, "manifest.json")
         if os.path.exists(mf):
@@ -468,13 +478,23 @@ def structural(rep, deck, media, spec, args):
                 rep.add(False, "body copy size",
                         f"{ts['size']}pt for {ts['chars']} chars "
                         f"(min {MIN_BODY_FONT}pt)", i)
-        geometry_checks(rep, slide, i, args)
+        geometry_result=geometry_checks(rep, slide, i, args)
         budget_checks(rep, slide, i, args)
+        evidence_page=next((r['plan'] for r in args.style.get('evidence_pages',[]) if r['page']==i),None)
+        if evidence_page:
+            from chart_qa import check as check_chart
+            result=check_chart(slide,evidence_page)
+            rep.add(result['ok'],'source chart provenance / zero baseline','; '.join(result['errors']) or f"{result['checks']} points verified",i)
         if canvas.artifact=='poster':
             from layout_check import check_slide
             dialect=args.style.get('dialect',{})
-            checked=check_slide(slide,i,canvas=canvas,poster_policy=args.style.get('poster',{}),
+            checked=geometry_result if geometry_result is not None else check_slide(slide,i,canvas=canvas,poster_policy=args.style.get('poster',{}),
                                 primary=dialect.get('primary'),secondary=dialect.get('secondary'))
+            if not hasattr(rep,'poster_layout'):rep.poster_layout=[]
+            rep.poster_layout.append(checked)
+            if 'metrics' in checked:
+                if not hasattr(rep,'poster_metrics'):rep.poster_metrics=[]
+                rep.poster_metrics.append({'page':i,**checked['metrics']})
             for failure in checked['fails']:
                 rep.add(False,'poster measured policy',failure,i)
     unresolved=sorted(f for f in all_fonts if not tm.resolve(f))
@@ -535,6 +555,13 @@ def pixel_checks(rep, deck, media, render, args):
                               json.load(open(mf0, encoding="utf-8"))["pages"]
                               if p.get("reversed")}
     for i, f in enumerate(files, 1):
+        style=getattr(args,'style',{})
+        plan=style.get('poster',{}).get('art_direction') if canvas.artifact=='poster' else next((r['plan'] for r in style.get('evidence_pages',[]) if r['page']==i),None)
+        if plan and plan.get('mode')=='infographic':
+            from evidence_presence import measure
+            presence=measure(f,plan,aio.background_file(media,i))
+            if not hasattr(rep,'evidence_presence'):rep.evidence_presence=[]
+            rep.evidence_presence.append(dict(page=i,**presence))
         img = Image.open(f).convert("RGB")
         w, h = img.size
         px = w / float(PAGE_W)
@@ -575,7 +602,7 @@ def pixel_checks(rep, deck, media, render, args):
         #     texture rather than noise), and the generator's own registration
         #     marks. Letter-spaced caps labels warn instead of failing.
         if bg is not None and i in reversed_pages:
-            rep.exempt("no dot field under body copy",
+            rep.exempt("background texture density under body copy",
                     f"page {i} is a flood: dot-field coverage is not separable "
                     f"from the flood's own grain", i)
         elif bg is not None:
@@ -602,7 +629,7 @@ def pixel_checks(rep, deck, media, render, args):
                     worst = frac_cell
                     worst_txt = ts["text"][:18]
                     worst_sev = "warn" if ts["letterspaced"] else "fail"
-            rep.add(worst < args.max_bg_ink, "no dot field under body copy",
+            rep.add(worst < args.max_bg_ink, "background texture density under body copy",
                     f"worst text box has {worst*100:.1f}% background ink "
                     f"(\"{worst_txt}\"; page background ink is {bg_frac*100:.1f}%)",
                     i, worst_sev)
@@ -615,20 +642,26 @@ def pixel_checks(rep, deck, media, render, args):
         page_px = np.asarray(img)
         worst_delta, worst_txt = 999.0, ""
         for ts in text_shapes(prs.slides[i - 1]):
-            gx0, gy0, gx1, gy1 = ts["glyph"]
-            cx0 = max(0, int(gx0 * px)); cy0 = max(0, int(gy0 * px))
-            cx1 = min(w, int(gx1 * px)); cy1 = min(h, int(gy1 * px))
-            if cx1 - cx0 < 3 or cy1 - cy0 < 3:
-                continue
-            cell = page_px[cy0:cy1, cx0:cx1].reshape(-1, 3)
-            lums = np.sort(cell @ np.array([0.2126, 0.7152, 0.0722]))
-            n = max(1, len(lums) // 5)
-            delta = float(lums[-n:].mean() - lums[:n].mean())
+            # Sample ink-sized character regions, not the empty inter-letter
+            # and inter-line area of an entire paragraph. Keep the weakest text
+            # shape visible in the report; absent/white-on-white text still fails.
+            spreads=[]
+            rects=tm.glyph_rects(ts['shape'])
+            for gx0,gy0,gx1,gy1 in rects:
+                cx0=max(0,int(gx0*px));cy0=max(0,int(gy0*px))
+                cx1=min(w,int(gx1*px)+1);cy1=min(h,int(gy1*px)+1)
+                if cx1-cx0<2 or cy1-cy0<2:continue
+                cell=page_px[cy0:cy1,cx0:cx1].reshape(-1,3)
+                lums=np.sort(cell @ np.array([.2126,.7152,.0722]))
+                n=max(1,len(lums)//5)
+                spreads.append(float(lums[-n:].mean()-lums[:n].mean()))
+            if not spreads:continue
+            delta=float(np.percentile(spreads,25))
             if delta < worst_delta:
                 worst_delta, worst_txt = delta, ts["text"][:18]
         if worst_txt:
             rep.add(worst_delta >= MIN_GLYPH_DELTA, "text is legible where it sits",
-                    f"worst text box has {worst_delta:.0f} luminance spread "
+                    f"worst text shape has {worst_delta:.0f} per-glyph luminance spread "
                     f"(min {MIN_GLYPH_DELTA:.0f}) on \"{worst_txt}\"", i)
 
         # (d) a text box declared no-wrap must actually be wide enough for its
@@ -754,6 +787,9 @@ def main():
         rc = 3
     if args.json:
         json.dump({"deck": args.deck, "items": rep.items,
+                   'poster_metrics':getattr(rep,'poster_metrics',[]),
+                   'evidence_presence':getattr(rep,'evidence_presence',[]),
+                   'poster_layout':getattr(rep,'poster_layout',[]),
                    "failures": sum(i['status'] == 'fail' for i in rep.items),
                    'warnings': sum(i['status'] == 'warn' for i in rep.items),
                    'passed': sum(i['status'] == 'passed' for i in rep.items),

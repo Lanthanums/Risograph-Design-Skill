@@ -7,12 +7,13 @@ import sys
 sys.dont_write_bytecode = True
 from dataclasses import dataclass, asdict
 import math
+from functools import lru_cache
 import re
 import textmetrics as tm
 
 CLOSING = set('，。！？；：、）》】」』〕〉…,.!?;:%')
 OPENING = set('（《【「『〔〈(')
-TOKEN = re.compile(r"[A-Za-z0-9]+(?:['’\-][A-Za-z0-9]+)*|[^\S\n]+|[^\s]")
+TOKEN = re.compile(r"(?:\d{1,2}:\d{2}(?:\s?[APap][Mm])?)|(?:[$£€¥￥]\s?\d[\d,.]*(?:\s?(?:USD|EUR|RMB))?|\d[\d,.]*(?:[–-]\d[\d,.]*)?\s?(?:kg|mg|km|cm|mm|ml|mL|GB|MB|kWh|Hz|°C|°F|%|公斤|千米|毫米|分钟|小时|岁|人|元|pt|g|m|L|s|h)(?![A-Za-z]))|\d+(?:[,.]\d+)*(?:[–-]\d+(?:[,.]\d+)*)?(?![A-Za-z0-9-])|[A-Za-z0-9]+(?:['’\-][A-Za-z0-9]+)*|[^\S\n]+|[^\s]")
 
 
 def source_text(value):
@@ -33,6 +34,11 @@ def _units_of(paragraph):
 
 
 def lines_of(value, family, size, width, bold=False, spc=0):
+    return list(_lines_cached(source_text(value),family,size,width,bold,spc))
+
+
+@lru_cache(maxsize=4096)
+def _lines_cached(value, family, size, width, bold=False, spc=0):
     """Latin words and CJK characters, with basic opening/closing kinsoku.
 
     Explicit newlines, including blank paragraphs, survive. Whitespace at an
@@ -57,7 +63,7 @@ def lines_of(value, family, size, width, bold=False, spc=0):
             if not current.isspace() and tm.advance(current.rstrip(), family, size, bold, spc) > width:
                 raise ValueError(f'unbreakable token {current.strip()!r} needs {tm.advance(current.strip(), family, size, bold, spc):.1f}pt width')
         result.append(current.rstrip())
-    return result
+    return tuple(result)
 
 
 def wrap_runs(runs,width):
@@ -111,9 +117,16 @@ def fit(value, family, size, width, height, *, minimum=16, bold=False,
     value = source_text(value)
     minimum = float(minimum)
     if not all(math.isfinite(v) and v > 0 for v in (requested, minimum, width, height, ls)):
-        raise ValueError(f'{role} block={block_index}: invalid fitting region {width}x{height}, requested={requested}, minimum={minimum}')
+        raise ValueError(f'{role} block={block_index}: invalid fitting region {width}x{height}, requested={requested}, minimum={minimum}; '
+                         'preceding rows/roles consumed the available region; change row allocation before font size')
     if minimum > requested:
         raise ValueError(f'{role} block={block_index}: requested {requested}pt below minimum {minimum}pt in {width}x{height}pt')
+    import metric_cache as mc
+    cache_key=None
+    if not callable(offset):
+        cache_key=mc.key('fit',[value,family,size,width,height,minimum,bold,ls,spc,offset],(family,bold))
+        saved=mc.get(cache_key)
+        if saved is not None:return Fit(**dict(saved,lines=tuple(saved['lines'])))
     reason = 'no candidate size'
     # Re-evaluate exact font metrics at every candidate, rather than assume
     # proportional rounding. A bounded half-point search includes the floor.
@@ -127,13 +140,15 @@ def fit(value, family, size, width, height, *, minimum=16, bold=False,
         try:
             lines = lines_of(value, family, chosen, available, bold, spc)
         except ValueError as exc:
-            reason = str(exc)
+            reason = f'{exc}; usable line width {available:.1f}pt after no-wrap safety padding (outer {width:.1f}pt)'
             continue
         pitch = tm.line_height(family, chosen, bold, ls)
         needed = len(lines) * pitch + shadow
         if needed <= height + 1e-6:
             measured = max((tm.advance(t, family, chosen, bold, spc) for t in lines), default=0)
-            return Fit(str(value), tuple(lines), family, chosen, bold, ls, spc, measured, needed, pitch, shadow)
+            result=Fit(str(value), tuple(lines), family, chosen, bold, ls, spc, measured, needed, pitch, shadow)
+            if cache_key:mc.put(cache_key,result.to_dict())
+            return result
         reason = f'{len(lines)} measured lines need {needed:.1f}pt height'
     raise ValueError(f'{role} block={block_index}: cannot fit region {width:.1f}x{height:.1f}pt; requested {requested:g}pt, minimum {minimum:g}pt; {reason}. Reallocate content or change the layout.')
 
@@ -150,7 +165,7 @@ def draw(slide, x, y, width, fitted, theme, *, role='body', block_index=None,
         for i, line in enumerate(fitted.lines):
             rk.stack(slide, x, y+i*fitted.pitch, width-fitted.offset,
                      fitted.pitch, [(line, fitted.font, fitted.size, fitted.bold)],
-                     theme, front=color or theme.front_ink, back=theme.back_ink,
+                     theme, front=color or theme.display_ink, back=theme.back_ink,
                      offsets=offsets, align=alignment, ls=fitted.ls,
                      spc=fitted.spc, autofit=False)
     else:

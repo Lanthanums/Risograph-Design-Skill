@@ -8,9 +8,9 @@ import riso_kit as rk
 import textmetrics as tm
 import typefit as tf
 
-FAMILIES = ('type_led','image_led','editorial_event','data_poster','manifesto_quote')
+FAMILIES = ('type_led','image_led','editorial_event','data_poster','manifesto_quote','explainer')
 TEXT_ROLES = ('title','subtitle','body','block','metadata','cta','key_number',
-              'key_number_label','quote','attribution','footer','block_title','comparison','process')
+              'key_number_label','quote','attribution','footer','block_title','comparison','process','chart_title','chart_label','chart_value')
 TITLE_MIN_SHARE = 0.05
 TITLE_BODY_RATIO = 1.8
 
@@ -26,6 +26,8 @@ def choose_family(content, requested, seed):
         return requested,'user'
     if content.get('image'):
         return 'image_led','semantics'
+    if content.get('blocks') or content.get('process') or content.get('comparison') or content.get('chart') or content.get('key_number') or content.get('data'):
+        return 'explainer','semantics'
     if _present(content.get('key_number')) or content.get('data'):
         return 'data_poster','semantics'
     if content.get('date') or content.get('venue'):
@@ -38,9 +40,9 @@ def choose_family(content, requested, seed):
 
 lines_of = tf.lines_of  # old public helper stays available
 
-LAYOUT_DEFAULTS={'columns':'auto','structure':'rules','alignment':'l',
+LAYOUT_DEFAULTS={'columns':'auto','structure':'print','alignment':'l',
                  'footer_anchor':'content','vertical_alignment':'balanced','graphic':'auto',
-                 'graphic_position':'auto'}
+                 'graphic_position':'auto','composition':'auto','process_style':'horizontal'}
 
 
 def layout_options(raw=None):
@@ -48,10 +50,12 @@ def layout_options(raw=None):
     unknown=set(raw)-set(LAYOUT_DEFAULTS)-{'title_size','body_size'}
     if unknown:raise ValueError(f'Unknown poster layout fields: {sorted(unknown)}')
     out=dict(LAYOUT_DEFAULTS,**raw)
-    allowed={'columns':('auto',1,2),'structure':('rules','none'),'alignment':('l','c','r'),
+    allowed={'columns':('auto',1,2),'structure':('print','rules','none'),'alignment':('l','c','r'),
              'footer_anchor':('content','edge'),'vertical_alignment':('balanced','top'),
              'graphic':('auto','band','none'),
-             'graphic_position':('auto','after_title','after_content')}
+             'graphic_position':('auto','after_title','after_content','beside_title'),
+             'composition':('auto','columns','rail','ledger'),
+             'process_style':('horizontal','steps','vertical')}
     for key,values in allowed.items():
         if out[key] not in values or isinstance(out[key],bool):
             raise ValueError(f'poster layout.{key} must be one of {values}')
@@ -133,11 +137,18 @@ def compose_poster(slide,content,theme,canvas,family,seed,image_path=None,layout
     No semantic relation or copy is synthesized.
     """
     options=layout_options(layout)
+    if family!='explainer' and (options['graphic_position']=='beside_title' or options['process_style']!='horizontal'):
+        raise ValueError('beside_title and process_style variants require family explainer')
+    if family=='explainer':
+        if content.get('full_bleed_reason'):
+            raise ValueError('explainer uses inset images; full_bleed_reason requires family image_led')
+        import poster_editorial
+        return poster_editorial.compose(slide,content,theme,canvas,options,image_path)
     x0,y0,x1,y1=canvas.safe
     w,h=x1-x0,y1-y0;short=min(canvas.width,canvas.height)
     gap=short*.025
     body_size=options.get('body_size',max(18,short*(.033 if family in ('type_led','editorial_event') else .026)))
-    title_size=options.get('title_size',short*(.11 if family in ('data_poster','manifesto_quote') else .175))
+    title_size=options.get('title_size',short*(.10 if family in ('data_poster','manifesto_quote') else .125))
     minimum=short*TITLE_MIN_SHARE
     setter=Typesetter(slide,theme,canvas,content.get('text_bleed',[]),options['alignment'])
     quote=content.get('quote')
@@ -201,6 +212,7 @@ def compose_poster(slide,content,theme,canvas,family,seed,image_path=None,layout
     # alternatives. No automatic flow is derived from ordinary prose.
     columns=options['columns']
     if columns=='auto':columns=2 if len(modules)>=3 and w>=600 and family!='image_led' else 1
+    columns=min(columns,max(1,len(modules)))
     if family=='image_led':columns=1
     body_x=x0+w*.65 if family=='image_led' else x0
     body_w=w*.35 if family=='image_led' else w
@@ -215,13 +227,13 @@ def compose_poster(slide,content,theme,canvas,family,seed,image_path=None,layout
         for role,value,index,heading in module:
             yy=cursors[col]
             max_h=bottom-yy-gap
-            size=body_size*1.2 if heading else body_size
+            size=body_size*1.2 if heading else max(16,body_size*.78) if role=='attribution' else body_size
             floor=17 if heading else 16
             f=setter.measure(role,value,column_w,max_h,size,False,floor,heading,index)
             regions.append((role,f,xx,yy,column_w,False,index))
             cursors[col]+=f.height+gap*.6
             max_support=max(max_support,f.size)
-        if options['structure']=='rules' and mi<len(modules)-1:
+        if options['structure'] in ('rules','print') and mi<len(modules)-1:
             rules.append((xx,cursors[col]+gap*.3,column_w))
         cursors[col]+=gap
     if max_support:
@@ -284,7 +296,7 @@ def compose_poster(slide,content,theme,canvas,family,seed,image_path=None,layout
             delta=band_h+2*gap
             position=options['graphic_position']
             if position=='auto':
-                position='after_content' if len(regions[0][1].lines)>1 and not foot else 'after_title'
+                position='after_title'
             if position=='after_content':
                 graphic_at=end
                 graphic_index=len(regions)
@@ -295,7 +307,9 @@ def compose_poster(slide,content,theme,canvas,family,seed,image_path=None,layout
             end+=delta
             graphic_reason='measured band '+position
         elif options['graphic']=='band':
-            raise ValueError('graphic band cannot fit; revise columns/content allocation or choose none')
+            raise ValueError(f'graphic band needs {band_h+2*gap:.1f}pt surplus, have {room:.1f}pt; '
+                             f'deficit {band_h+2*gap-room:.1f}pt. Change title allocation/columns, '
+                             'or use explainer for dense content. Canvas defaults scale with its short side.')
         else:
             graphic_reason='content uses available height; retain attached accents only'
     shift=min(h*.12,max(0,(bottom-end)*.30)) if options['vertical_alignment']=='balanced' else 0

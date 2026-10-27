@@ -47,8 +47,7 @@
    `cover, data, data, divider, features, quote, grid, venn, numbered, numbered, timeline, ask, closing`。
 3. 再往每个 slot 里填内容。填不进去说明页型选错了，回去改序列——不要为了塞内容加小字。
 
-`tests/test_contract.py` 用三份 fixture（英文汇报 / 中文汇报 / 双语讲义）验证：
-不同内容的页型序列必须不同，且三份 deck 之间不得共享任何一句 ≥12 字的文案。
+页型序列由当前内容决定。不要把其他文稿的具体文案带入新 deck。
 
 ## 版式规则
 

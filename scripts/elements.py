@@ -23,6 +23,8 @@ Usage
 """
 import sys
 sys.dont_write_bytecode = True
+from runtime import prepare
+prepare()
 import argparse
 import json
 import math
@@ -1048,6 +1050,7 @@ def main():
     c.add_argument("--role", choices=['hero','support','micro'])
     c.add_argument("--safe", action="store_true", help="only copy-free automatic placement candidates")
     c.add_argument("--limit", type=int, help="maximum returned elements")
+    c.add_argument('--lang',choices=['en','zh'],default='en',help='catalogue description language; does not change artwork')
     c.add_argument("--markdown", default=None,
                    help="regenerate references/elements.md from the registry")
     s = sub.add_parser("sheet")
@@ -1065,6 +1068,7 @@ def main():
                      if a.role is None or role==a.role}
             selected=[m for m in catalogue() if m['name'] in allowed]
         if a.limit is not None:selected=selected[:a.limit]
+        selected=[dict(m,note_en=m['name'].replace('_',' ')+'; '+m['category']+' print element') for m in selected]
         if a.json:
             print(json.dumps([{k: v for k, v in m.items() if k != "fn"}
                               for m in selected], ensure_ascii=False, indent=2))
@@ -1077,7 +1081,7 @@ def main():
                     cat = m["category"]
                     print(f"\n[{cat}]")
                 print(f"  {m['name']:<20} {','.join(m['dialects']):<8} "
-                      f"size {m['size']}  {m['note']}")
+                      f"size {m['size']}  {m['note_en'] if a.lang=='en' else m['note']}")
             print(f"\n{len(selected)} elements")
         return 0
     print(sheet(a.out, a.group, cols=a.cols))

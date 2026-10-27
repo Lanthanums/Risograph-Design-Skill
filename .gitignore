@@ -22,3 +22,14 @@ media/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Runtime and delivery artifacts
+.venv*/
+.riso-state/
+*-media/
+*-preview/
+*.style.json
+*.pdf
+*.zip
+*.log
+.pytest_cache/

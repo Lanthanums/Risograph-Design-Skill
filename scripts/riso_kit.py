@@ -103,7 +103,10 @@ DESIGN = {
         "inkB": ("inkB", "5-12%   (次级条、几何图形)"),
         "ink_black": ("ink", "~10%   (线条、描边、墨点)"),
         "text": ("#2B2B2B", "炭黑正文色，永远不用纯黑"),
-        "ink_deep": ("ink_deep", "三层错位最底层、维恩交叠区"),
+        "ink_deep": ("ink_deep", "数字、反白辅助层、维恩交叠区"),
+        "title_front": ("title_front", "标题深色字面"),
+        "title_mid": ("title_mid", "大标题中间套色"),
+        "title_back": ("title_back", "标题浅色底层"),
         "inkAB": ("inkAB", "背景大面积叠印"),
         "accent1": ("accent1", "≤5%，只做高亮底色条"),
         "accent2": ("accent2", "≤2%，一根小条级别的点缀"),
@@ -119,12 +122,13 @@ DESIGN = {
         "note": [13, 15, "括号旁注（斜体；中文用楷体不倾斜）"],
     },
     "misregistration": {
-        # tier: (back offset, mid offset) in pt — back carries ink_deep, mid inkA
+        # Legacy tier query: (back offset, mid offset) in points.
         "display_xl": [11.0, 5.5],
         "display_l": [8.0, 4.0],
         "display_m": [5.0, 2.5],
         "page_title": [3.0, 1.5],
-        "layer_order": ["ink_deep", "inkA", "text"],
+        "layer_order": ["title_back", "title_mid", "title_front"],
+        "triple_min_pt": 64,
         "print": {"ratio": .045, "cap": 6.0},
         "reverse": {"ratio": .075, "cap": 12.0},
     },
@@ -229,6 +233,11 @@ class Theme:
         self.accent1 = self.t["accent1"]
         self.accent2 = self.t["accent2"]
         self.text = "#2B2B2B"            # charcoal, never pure black on paper
+        # Related ink tones read as registration, rather than a red drop shadow.
+        # Warm palettes keep their body/chart inks; display uses a quieter ink.
+        self.title_front = self.t['title_front']
+        self.title_mid = self.t['title_mid']
+        self.title_back = self.t['title_back']
         self.print_grammar = print_grammar
         # Page kind. A reversed page is flooded with ink A, so display type on it
         # is paper-coloured; a paper page needs ink. Archetypes must read this
@@ -237,6 +246,8 @@ class Theme:
         self.on_red = False
         self.lang = lang
         self.fonts = dict(FONTS)
+        if lang.lower().startswith('en'):
+            self.fonts.update(body='Georgia',heading='Arial')
         if fonts:
             self.fonts.update(fonts)
         self.font_diagnostics = []
@@ -247,8 +258,8 @@ class Theme:
             'body': ('Noto Serif SC','Noto Serif CJK SC','SimSun','Songti SC','Microsoft YaHei','Noto Sans CJK SC'),
         }
         if not lang.lower().startswith('zh'):
-            chains['body'] += ('Georgia','DejaVu Serif','Liberation Serif')
-            chains['heading'] += ('Georgia','DejaVu Sans','Liberation Sans')
+            chains['body'] = ('Georgia','DejaVu Serif','Liberation Serif')+chains['body']
+            chains['heading'] = ('Arial','DejaVu Sans','Liberation Sans')+chains['heading']
         for role, chain in chains.items():
             requested = self.fonts[role]
             if tm.resolve(requested):
@@ -271,9 +282,13 @@ class Theme:
         return self.paper if self.on_red else self.text
 
     @property
+    def display_ink(self):
+        return self.paper if self.on_red else self.title_front
+
+    @property
     def back_ink(self):
         """Colour of the offset back layer: ink on paper, ink on a flood too."""
-        return self.ink if self.on_red else self.ink_deep
+        return self.ink if self.on_red else self.title_back
 
     @property
     def f_display(self):
@@ -519,13 +534,9 @@ def stack(slide, x, y, w, h, runs, theme, front=None, back=None, mid=None,
           autofit=True, paint=None):
     """Three-layer misregistered display type — native, editable text boxes.
 
-    back = theme.ink_deep (ink A pushed toward the ink black)
-    mid  = theme.inkA
-    front= theme.text (charcoal), or `paint` when the page is reversed
-    The rule ("deep ink / light ink / charcoal") is unbuildable when the
-    second ink *is* the ink black; this stack is defined from ink A only, so it
-    works for every palette. Offsets default to the frozen per-size tiers in
-    DESIGN["misregistration"] (see references/design-system.md).
+    Paper titles use related title_back / title_mid / title_front tones.
+    Large fitted titles retain three plates; small titles retain two. Explicit
+    colors/offsets win. None selects the theme default; False disables a shadow.
 
     `paint` sets the front layer's colour. It must be chosen from the page, not
     from the archetype: a reversed page needs paper-coloured type, a paper page
@@ -551,47 +562,30 @@ def stack(slide, x, y, w, h, runs, theme, front=None, back=None, mid=None,
             runs = [(t, f, max(8.0, s * k), b) for t, f, s, b in lone]
         else:
             runs = lone
-    front_color = paint if paint is not None else (front or theme.text)
+    front_color = paint if paint is not None else (front or theme.display_ink)
     size0 = max(s for _t, _f, s, _b in runs)
     base_off = offsets if offsets is not None else misreg_offsets(size0, 'reverse' if theme.on_red else 'print')
-    # An explicit None for a layer means "the caller does not want it", which is
-    # what p_statement asks for on a reversed page (mid=None). Only a bare
-    # default falls back to the theme colour.
-    back_col = theme.ink_deep if back is None else back
-    mid_col = theme.inkA if mid is None else mid
+    # False disables a shadow; None selects its shared theme default.
+    back_col = theme.back_ink if back is None else back
+    mid_col = (theme.ink_deep if theme.on_red else theme.title_mid) if mid is None else mid
     raw = []
     if back_col and base_off[0]:
         raw.append((back_col, base_off[0]))
     if mid_col and base_off[1]:
         raw.append((mid_col, base_off[1]))
-    if size0 < 100 and len(raw) > 1:
-        # Rule G allows one shadow under 100pt. Keep the FIRST candidate: the
-        # back layer is the one that reads on both a paper page and a reversed
-        # one, whereas the mid layer prints ink A on an ink-A flood and
-        # disappears there.
+    if size0 < DESIGN['misregistration']['triple_min_pt'] and len(raw) > 1:
+        # Keep small glyphs clean; reserve three plates for fitted display type.
         raw = raw[:1]
     layers = []
     for color, off in raw:
         ref = layers[-1][0] if layers else front_color
-        # Rule G drops a layer whose neighbour is too close in luminance. That
-        # is a sound test on a paper page, where the neighbour of a display line
-        # is the layer behind it. On a reversed page the backdrop is the ink
-        # flood, not the front layer, so running the test there deletes the very
-        # layer it is meant to check — a paper-white halo judged muddy against
-        # charcoal type. On a flood every layer is kept and qa.py judges the
-        # contrast of the result.
-        if not theme.on_red and abs(_lum(color) - _lum(ref)) < 0.25:
-            continue            # muddy neighbour: drop the farther layer
+        # Related hues need not differ by a large luminance jump to be visible.
+        # Only identical adjacent paints are redundant; pixel QA checks contrast.
+        if not theme.on_red and color.lower() == ref.lower():
+            continue
         layers.append((color, off))
     if not layers and raw:
-        # Rule G is a "drop the muddy layer" rule, not a "print flat type" rule.
-        # Some palettes place ink_deep within 0.05 luminance of the charcoal
-        # front, so the test can reject the theme's own back layer and leave the
-        # misregistered stack with a single layer — the display type loses its
-        # overprint. When the test would remove everything, keep the back layer:
-        # one shadow is the minimum the archetypes are designed around, and a
-        # 0.05 luminance step still reads as an edge at display sizes. Only the
-        # muddiness test is relaxed; the <=2 layer cap stands.
+        # Preserve an explicitly requested offset even for monochrome paints.
         color, off = raw[0]
         layers.append((color, off))
     for color, off in layers:
@@ -711,11 +705,11 @@ def page_title(slide, x, y, txt, theme, size=34, w=700, front=None):
     off=misreg_offsets(size,'reverse' if theme.on_red else 'print')[0]
     back=text(slide, x + off, y + off, w, size * 1.5,
          [dict(runs=[(txt, {})], font=theme.f_heading, size=size,
-               color=theme.inkA, bold=True, ls=1.1)], wrap=False)
+               color=theme.back_ink, bold=True, ls=1.1)], wrap=False)
     back.name='riso-layer[back]'
     result=text(slide, x, y, w, size * 1.5,
                 [dict(runs=[(txt, {})], font=theme.f_heading, size=size,
-                      color=front or theme.text, bold=True, ls=1.1)], wrap=False)
+                      color=front or (theme.paper if theme.on_red else theme.title_front), bold=True, ls=1.1)], wrap=False)
     result.name='riso-layer[front]'
     return result
 
@@ -758,10 +752,12 @@ def sticker(slide, x, y, w, h, txt, theme, size=44, rot=-5, fill=None,
     fam = font or theme.f_display
     size = max(22.0, min(float(size),
                          tm.fit_size(txt, fam, size, w * 0.78, True)))
-    return text(slide, x, y, w, h,
+    shape=text(slide, x, y, w, h,
                 [dict(runs=[(txt, {})], font=fam, size=size,
                       color=color or theme.paper, align="c", ls=1.0)],
                 anchor="m", wrap=False)
+    shape.name='sticker[text]'
+    return shape
 
 
 def bar_row(slide, x, y, w, pct, scale_max, theme, color=None, height=20):

@@ -18,6 +18,8 @@ import re
 import sys
 import os
 sys.dont_write_bytecode = True
+from runtime import prepare
+prepare()
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -197,6 +199,9 @@ def check_slide(slide, idx, primary=None, secondary=None, archetype=None,
                 density_band=None, canvas=None, poster_policy=None):
     canvas = canvas or DECK_CANVAS
     PAGE_W,PAGE_H,PAGE_AREA = canvas.width,canvas.height,canvas.area
+    if canvas.artifact=='poster' and (poster_policy or {}).get('art_direction'):
+        from poster_review import check_slide as check_art
+        return check_art(slide,idx,canvas,poster_policy['art_direction'])
     HEAD_BAND,FOOT_BAND = (0,canvas.bands[1]),(canvas.bands[2],canvas.height)
     shapes = list(slide.shapes)
     texts, decor, chrome, bars, figures = [], [], [], [], []
@@ -312,6 +317,12 @@ def check_slide(slide, idx, primary=None, secondary=None, archetype=None,
     # --- wrap / overflow ------------------------------------------------------
     wrap_issues = []
     for t in texts + [c for c in chrome if c["text"]]:
+        glyphs=tm.glyph_rects(t['shape'])
+        if glyphs and any(r[0]<-1.5 or r[2]>canvas.width+1.5 or r[1]<-1.5 or r[3]>canvas.height+1.5 for r in glyphs):
+            wrap_issues.append(f"painted glyphs exceed canvas: {t['text'][:24]!r}")
+        if canvas.artifact=='deck' and t['kind']=='text' and t['shape'].name!='sticker[text]' and glyphs and any(
+                r[0]<canvas.safe[0]-1.5 or r[2]>canvas.safe[2]+1.5 for r in glyphs):
+            wrap_issues.append(f"painted glyphs exceed horizontal safe area: {t['text'][:24]!r}")
         lines, need_h = _measured_lines(t["shape"])
         box_h = t["rect"][3] - t["rect"][1]
         if not t["wrap"]:

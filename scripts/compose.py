@@ -246,7 +246,7 @@ def density_band(scenario,level,override=None):
             isinstance(v,bool) or not isinstance(v,(int,float)) or not math.isfinite(v) for v in override) or not 0<=override[0]<override[1]:
             raise ValueError('meta.word_band must be [nonnegative lower, greater finite upper]')
         return tuple(override)
-    return SPEECH_WORD_BANDS[level] if scenario=='speech' else DENSITY_LEVELS[level]['words']
+    return SPEECH_WORD_BANDS[level] if scenario in ('speech','proposal') else DENSITY_LEVELS[level]['words']
 
 
 def infer_density(scenario, hint=None):
@@ -614,7 +614,7 @@ def content_obstacles(slide, canvas=None):
 
 def plan_page(archetype, primary, secondary, scenario, rnd, text_rects,
               taken_area=0.0, protection=None, archetype_kind=None, canvas=None,
-              exclusions=(), candidates=None, graphic_rect=None, graphic_element=None):
+              exclusions=(), candidates=None, graphic_rect=None, graphic_element=None, graphic_recipe='auto'):
     """Decide what to draw on this page — delegates to place_decor.Placer.
 
     Anchor-first, never hole-filling: the whole protocol lives in place_decor
@@ -658,12 +658,24 @@ def plan_page(archetype, primary, secondary, scenario, rnd, text_rects,
     scale = dens["element_scale"] * DIALECTS[primary]["density_bias"]
 
     if graphic_rect:
-        placer.place_composition(graphic_rect, graphic_element)
+        composed=False
+        if canvas.artifact=='poster' and not graphic_element:
+            import graphic_recipes
+            composed=graphic_recipes.place(placer,graphic_rect,primary,graphic_recipe)
+        if not composed:
+            placer.place_composition(graphic_rect, graphic_element)
     att_lo, att_hi = dens["attached"]
-    placer.attach(max_count=rnd.randint(att_lo, att_hi), element_scale=scale)
-    placer.place_hero(element_scale=scale,
-                      min_room=dens.get("hero_min_room", 0.12))
-    placer.place_group(element_scale=scale)
+    composition_items=[p for p in placer.placed if p.get('group')=='composition']
+    attached_count=rnd.randint(att_lo, att_hi)
+    if composition_items:
+        # A planned figure already supplies the main graphic. A singleton counts
+        # as a standalone detail in layout QA; budget it before adding accents.
+        attached_count=min(attached_count,max(0,placer.micro_cap-(len(composition_items)==1)))
+    placer.attach(max_count=attached_count, element_scale=scale)
+    if not composition_items:
+        placer.place_hero(element_scale=scale,
+                          min_room=dens.get("hero_min_room", 0.12))
+        placer.place_group(element_scale=scale)
     main_names={n for _,n in placer._pools['main']}
     for item in placer.placed:
         item['dialect']=primary if item['name'] in main_names else secondary
@@ -720,6 +732,8 @@ def apply_plan(slide, plan, theme, media_dir, seed=0, page=1):
             rec["function"] = item["function"]
         if item.get("group"):
             rec["group"] = item["group"]
+        for key in ('recipe','recipe_part'):
+            if key in item:rec[key]=item[key]
         records.append(rec)
     return records
 

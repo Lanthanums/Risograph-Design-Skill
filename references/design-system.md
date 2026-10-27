@@ -12,7 +12,8 @@ python scripts/make_textures.py presets
 ## Color roles
 
 `paper` is warm textured substrate. `inkA` leads, `inkB` supports, `ink` and
-charcoal carry readable copy. `ink_deep` strengthens offset type; `inkAB` is
+charcoal carry readable copy. `title_front/mid/back` carry related display tones;
+`ink_deep` remains available for data/overprint effects; `inkAB` is
 the multiply overprint. `tintA`/`tintB` are washes. `accent1` and `accent2`
 punctuate sparingly; a bright accent is a backing for dark type, not faint
 foreground copy on paper. These are derived print roles, not extra spot inks.
@@ -60,8 +61,9 @@ ink; grain alone is valid when no legal field room remains.
 
 This package carries frozen constraints and generators, never finished reference
 artwork or example copy. User photos pass through duotone. A user-supplied style
-reference can supply only color/texture/offset parameters, recorded separately
-from content decisions. Changing calibration requires code and regression checks;
+reference may supply color/texture/offset parameters and principles of graphic
+hierarchy, recorded separately from content decisions. Do not trace its skeleton.
+Changing calibration requires code and regression checks;
 ordinary tasks must not reopen an old artifact to derive a new skeleton.
 
 ## Measured display layers
@@ -69,11 +71,12 @@ ordinary tasks must not reopen an old artifact to derive a new skeleton.
 `DESIGN.misregistration` defines continuous size ratios and caps separately for
 paper `print` registration and stronger `reverse` separation. Explicit user
 offsets win; one-argument `misreg_offsets(size)` preserves legacy tier queries.
-The ordinary-paper calibration sits between the original large tier offsets and
-the overly tight repaired offsets; reverse calibration is retained. Query the
-code for numeric values. The visible layer can be the middle plate when contrast
-filtering removes the deepest plate, so inspect actual output as well as offsets.
+Ordinary-paper and reverse layouts use separately calibrated offsets. Query the
+code for numeric values. The title stack retains three distinct tonal plates at
+fitted display sizes of 64pt and above; smaller titles use one shadow. Related
+colors are no longer removed merely for a luminance difference below 0.25.
+Inspect actual edges as well as offsets.
 Stack layers share text, line breaks, alignment, and fitting, with intentional
 layer names for QA. A layer exception never licenses body/rule collisions.
 Shared `typefit` and `artifact_io` serve the genuine deck/poster intersections;
-canvas, rhythm, history, and the independent poster families remain the v2 engines.
+canvas, rhythm, state tracking and independent poster families use dedicated engines.

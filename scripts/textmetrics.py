@@ -52,14 +52,7 @@ FONT_FILES = {
     "Liberation Sans": ["LiberationSans-Regular.ttf", "LiberationSans-Bold.ttf"],
     "Liberation Serif": ["LiberationSerif-Regular.ttf", "LiberationSerif-Bold.ttf"],
 }
-FONT_DIRS = [
-    os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts"),
-    os.path.expanduser("~/AppData/Local/Microsoft/Windows/Fonts"),
-    "/System/Library/Fonts", "/Library/Fonts",
-    "/usr/share/fonts", "/usr/share/fonts/truetype",
-    "/usr/local/share/fonts", os.path.expanduser("~/.local/share/fonts"),
-    os.path.expanduser("~/.fonts"), os.path.expanduser("~/Library/Fonts"),
-]
+from font_catalog import FONT_DIRS, font_paths
 
 _cache = {}
 _resolved = {}
@@ -70,9 +63,7 @@ _font_paths = None
 def _paths():
     global _font_paths
     if _font_paths is None:
-        _font_paths = sorted({str(p) for d in FONT_DIRS if Path(d).is_dir()
-                              for p in Path(d).rglob('*')
-                              if p.suffix.lower() in ('.ttf','.otf','.ttc','.otc')})
+        _font_paths = [str(p) for p in font_paths(FONT_DIRS)]
     return _font_paths
 
 
@@ -147,11 +138,17 @@ def advance(text, family, size, bold=False, spc=0.0):
     f = font(family, size, bold)
     if f is None:
         raise ValueError(f'Font not resolvable for measurement: {family!r}')
+    import metric_cache as mc
+    cache_key=mc.key('advance',[text,family,size,bold,spc],(family,bold)) if len(text)>=8 else None
+    cached=mc.get(cache_key) if cache_key else None
+    if cached is not None:return cached
     try:
         w = f.getlength(text)
     except Exception:
         raise ValueError(f'Font measurement failed: {family!r}')
-    return w + spc * max(len(text) - 1, 0)
+    result=w + spc * max(len(text) - 1, 0)
+    if cache_key:mc.put(cache_key,result)
+    return result
 
 
 @lru_cache(maxsize=1024)
@@ -265,14 +262,14 @@ def line_records(shape):
     return records
 
 
-def glyph_rects(shape):
+def glyph_rects(shape, records=None):
     """Per-character visible rectangles at their effective measured positions.
 
     Whitespace has no glyph. This lets a line pass through empty gaps rather
     than treating an entire paragraph AABB as printed ink.
     """
     out=[]
-    for record in line_records(shape):
+    for record in line_records(shape) if records is None else records:
         x,y=record['x'],record['y']
         for value,o in record['runs']:
             face=font(o['font'],o['size'],o['bold'])
@@ -287,10 +284,10 @@ def glyph_rects(shape):
     return out
 
 
-def tight_rect(shape, mode='box', protection=0.):
-    records=line_records(shape)
+def tight_rect(shape, mode='box', protection=0., records=None):
+    records=line_records(shape) if records is None else records
     if mode=='ink':
-        rects=glyph_rects(shape)
+        rects=glyph_rects(shape, records)
     else:
         rects=[(r['x'],r['y'],r['x']+r['w'],r['y']+r['h']) for r in records]
     if not rects:return None
@@ -336,8 +333,9 @@ def audit(slide, mode="ink"):
     for sh in slide.shapes:
         if not sh.has_text_frame or not sh.text_frame.text.strip():
             continue
-        box = tight_rect(sh, mode="box")
-        ink = tight_rect(sh, mode=mode)
+        records = line_records(sh)
+        box = tight_rect(sh, mode="box", records=records)
+        ink = box if mode == 'box' else tight_rect(sh, mode=mode, records=records)
         if ink:
             out.append({"shape": sh, "rect": ink, "box": box,
                         "text": sh.text_frame.text.strip()})

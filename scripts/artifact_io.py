@@ -6,6 +6,8 @@ from pathlib import Path
 import shutil
 import zipfile
 import io
+import os
+import uuid
 
 
 def input_path(raw, base_dir=None, role='asset', directory=False):
@@ -79,3 +81,18 @@ def canonical_pptx(path):
             entry.compress_type = zipfile.ZIP_DEFLATED
             target.writestr(entry, source.read(name))
     Path(path).write_bytes(buffer.getvalue())
+
+
+def save_pptx(prs,path):
+    """Canonicalize staging, then atomically replace the editable artifact."""
+    path=Path(path).resolve()
+    path.parent.mkdir(parents=True,exist_ok=True)
+    staging=path.with_name('.'+path.name+'.'+uuid.uuid4().hex+'.tmp')
+    try:
+        prs.save(staging)
+        canonical_pptx(staging)
+        os.replace(staging,path)
+    except PermissionError as exc:
+        raise ValueError(f'Cannot publish {path}; close the file in PowerPoint or choose a writable output path') from exc
+    finally:
+        if staging.exists():staging.unlink()
