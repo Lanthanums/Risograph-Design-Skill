@@ -32,6 +32,7 @@ META.update(lang=string(),palette=string(),seed=dict(type='integer'),dialect=uni
 
 # CONTROLS is populated from the maintained declaration below, never a CLI copy.
 CONTROLS={
+ 'ornament':dict(type='enum',values=['focused','classic'],default='classic'),
  'element_density':dict(type='enum',values=['sparse','normal','rich'],default='normal'),
  'micro_exclude':dict(type='array',default=[]),
  'keep_together':dict(type='array',default=[]),

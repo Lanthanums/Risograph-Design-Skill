@@ -7,8 +7,9 @@ Choose `--draft` while planning and `--auto` for final checks.
 
 Both runners default to `--mode fast`. A verified complete-input cache can restore
 a successful run before importing presentation/image libraries. Keys include
-source bytes, assets, runtime code, dependencies, renderer identity, environment
-options and the shared font catalog. Used fonts and cached files are SHA-256
+source bytes, assets, the active pipeline’s code and shared runtime, dependencies,
+renderer identity, environment options and the font catalog. Deck and poster
+input caches and legacy dialect histories use separate namespaces. Used fonts and cached files are SHA-256
 checked. Corrupt entries are misses.
 
 A separate shared render cache reuses PNG/PDF outputs when saved PPTX, renderer,

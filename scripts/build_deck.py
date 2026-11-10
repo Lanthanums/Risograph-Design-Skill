@@ -100,6 +100,17 @@ KIND = {"ink": "ink", "inkA": "inkA", "inkB": "inkB", "ink_deep": "ink_deep",
 GAUGE_BAR_MAX = 128
 
 
+def deck_language(spec):
+    meta = spec.get('meta', {})
+    explicit = meta.get('lang') or meta.get('language')
+    if explicit:
+        return explicit
+    if any(page.get('modules') for page in spec.get('pages', [])):
+        copy = json.dumps(spec.get('pages', []), ensure_ascii=False)
+        return 'zh' if any('\u3400' <= char <= '\u9fff' for char in copy) else 'en'
+    return 'zh'
+
+
 def col(theme, name):
     return getattr(theme, KIND.get(name, "text"))
 
@@ -165,7 +176,7 @@ def p_cover(s, spec, th, idx, total, meta):
         ('thesis',flat(spec['thesis']) if spec.get('thesis') else None,24,th.f_body,18),
         ('bullets',' · '.join(spec.get('bullets',[])),16,th.f_body,14),
         ('subtitle',spec.get('subtitle'),20,th.f_body,16),
-        ('aside',spec.get('aside'),14,th.f_label,13)):
+        ('aside',spec.get('aside'),spec.get('aside_size',14),th.f_label,spec.get('aside_size',13))):
         if value:
             fitted = tf.fit(value,font,size,x1-x0,130,minimum=min(minimum,size),role='cover '+role)
             supports.append((role,fitted))
@@ -178,11 +189,34 @@ def p_cover(s, spec, th, idx, total, meta):
         # Reserve that space before fitting; this is no decoration/fill quota.
         from place_decor import word_count,tier_of,TEXT_TIERS
         available-=PAGE_H*TEXT_TIERS[tier_of(word_count(spec.get('title','')))]['quiet']
-    f = tf.fit(spec.get('title',''), th.f_display if _latin(spec.get('title','')) else th.f_heading,
-               size,title_w,available,minimum=min(size,54),bold=True,
-               role='cover title',offset=_shadow(th,spec.get('offsets')))
-    tf.draw(s,x0,cursor,title_w,f,th,role='cover-title',display=True,
-            offsets=spec.get('offsets'))
+    plates = getattr(th, 'deck_title_plates', None)
+    offset = _shadow(th,spec.get('offsets'))
+    if plates is not None:
+        from deck_ink_render import allowance, draw
+        offset = lambda size: allowance(th, size, plates)
+    if getattr(th, 'deck_editorial', False):
+        from deck_title_fit import fit as fit_title
+        value = spec.get('title', '')
+        phrases = spec.get('art_direction', {}).get('title_keep_phrases', ())
+        f = fit_title(value, th.f_display, size, title_w, available,
+                      minimum=min(size,42), ls=1.12, offset=offset, role='cover title',
+                      keep_phrases=phrases)
+        if len(f.lines) == 2 and '\n' not in value and f.width > title_w * .76:
+            # A modest optical trim maintains the open right edge when a
+            # semantic break makes the second line heavier than the first.
+            trimmed = max(min(size, 42), f.size * .90, f.size * title_w * .76 / f.width)
+            f = fit_title(value, th.f_display, trimmed, title_w, available,
+                          minimum=trimmed, ls=1.12, offset=offset, role='cover title',
+                          keep_phrases=phrases)
+    else:
+        f = tf.fit(spec.get('title',''), th.f_display if _latin(spec.get('title','')) else th.f_heading,
+                   size,title_w,available,minimum=min(size,54),bold=True,
+                   role='cover title',offset=offset)
+    if plates is not None:
+        draw(s, x0, cursor, title_w, f, th, plates, 'cover-title')
+    else:
+        tf.draw(s,x0,cursor,title_w,f,th,role='cover-title',display=True,
+                offsets=spec.get('offsets'))
     cursor += f.height+gap
     for role,f in supports:
         shapes = tf.draw(s,x0,cursor,x1-x0,f,th,role='cover-'+role,
@@ -203,9 +237,18 @@ def p_divider(s, spec, th, idx, total, meta):
           [(spec.get("index", "01"), th.f_display, spec.get("index_size", 168), False)],
           th, front=ink, back=th.back_ink, mid=None if not th.on_red else th.ink_deep,
           offsets=spec.get('offsets'))
-    stack(s, x0, y0 + 242, 700, 110,
-          [(spec.get("title", ""), th.f_heading, 80, True)],
-          th, front=ink, back=th.back_ink, mid=None, offsets=spec.get('offsets'))
+    if getattr(th, 'deck_editorial', False):
+        from deck_title_fit import fit as fit_title
+        from deck_ink_render import allowance, draw
+        plates = th.deck_title_plates
+        f = fit_title(spec.get('title', ''), th.f_heading, 80, 700, 108, minimum=38,
+                      offset=lambda size: allowance(th, size, plates), role='section title',
+                      keep_phrases=spec.get('art_direction', {}).get('title_keep_phrases', ()))
+        draw(s, x0, y0 + 242, 700, f, th, plates, 'divider-title', color=ink)
+    else:
+        stack(s, x0, y0 + 242, 700, 110,
+              [(spec.get("title", ""), th.f_heading, 80, True)],
+              th, front=ink, back=th.back_ink, mid=None, offsets=spec.get('offsets'))
     if spec.get("title_en"):
         label(s, x0 + 4, y0 + 354, 700, spec["title_en"], th, size=14,
               color=ink, spc=3.0)
@@ -245,7 +288,7 @@ def p_data(s, spec, th, idx, total, meta):
             rect(s, 600, yy + 6, 8, 8, fill=th.inkA)
             remain=len(side_items)-i
             item_height=(side_end-yy-8*(remain-1))/remain
-            measured=fitted_text(s,item,th,620,yy,292,item_height,19,16,'data side item',i)
+            measured=fitted_text(s,item,th,620,yy,292,item_height,21 if th.lang == 'en' else 19,16,'data side item',i)
             yy+=measured.height+8
         dashed(s,600,yy+4,x1,yy+4,th.text)
         if side.get("aside"):
@@ -259,11 +302,11 @@ def p_data(s, spec, th, idx, total, meta):
             colour = col(th, b.get("color", "inkB"))
             # stacked above its own bar: side by side the label ran into the
             # bar that starts at x=380
-            label(s, 380, yy - 24, 330, b["label"], th, size=15, color=colour,
+            label(s, 380, yy - 24, 330, b["label"], th, size=17 if th.lang == 'en' else 15, color=colour,
                   spc=1.0)
             w = 240 * (b["pct"] / float(peak))
             rect(s, 380, yy - 2, int(w), 22, fill=colour)
-            fitted_text(s,b.get('value',''),th,748,yy-4,164,36,18,16,'data bar value',i)
+            fitted_text(s,b.get('value',''),th,748,yy-4,164,36,21 if th.lang == 'en' else 18,16,'data bar value',i)
 
 
 def p_features(s, spec, th, idx, total, meta):
@@ -314,6 +357,21 @@ def p_features(s, spec, th, idx, total, meta):
 
 def p_quote(s, spec, th, idx, total, meta):
     x0, y0, x1, y1 = SAFE
+    if spec.get('editorial'):
+        layout = spec.get('art_direction', {}).get('quote_layout', 'auto')
+        if layout == 'classic':
+            p_editorial_quote(s, spec, th)
+        else:
+            from deck_quote import candidates, draw
+            layouts = candidates(spec['lines'], getattr(th, 'previous_quote_layout', None))
+            if layout != 'auto':
+                layouts = [layout, *[v for v in layouts if v != layout]]
+            layout = draw(s, spec, th, layouts, idx)
+        th.previous_quote_layout = layout
+        if not hasattr(th, 'quote_compositions'):
+            th.quote_compositions = []
+        th.quote_compositions.append(dict(page=idx, layout=layout))
+        return
     text(s, x0 + 48, y0 + 28, 200, 190,
          [dict(runs=[("\u201c", {})], font=th.f_label, size=150, color=th.inkA,
                ls=1.0)], wrap=False)
@@ -340,6 +398,59 @@ def p_quote(s, spec, th, idx, total, meta):
             font=th.f_body, size=17, color=th.text, ls=1.2)])
     if spec.get("source"):
         label(s, x0 + 62, dy + 48, 600, spec["source"], th, size=12)
+
+
+def p_editorial_quote(slide, page, theme):
+    """Measure a pull quote and its attribution as one vertical composition."""
+    left, top, right, bottom = SAFE
+    x = left + 54
+    width = min(right - x - 8, 720)
+    details = []
+    for role, value, size in (
+        ('quote-attribution', page.get('attribution'), 18),
+        ('quote-context', page.get('source'), 16),
+    ):
+        if value:
+            fitted = tf.fit(value, theme.f_body, size, width, 86,
+                            minimum=size, role=role)
+            details.append((role, fitted))
+
+    mark = tf.fit('\u201c', theme.f_display, 88, 100, 150, minimum=88, role='quote mark')
+    header_height = min(mark.height, 84)
+    rule_gap = 17
+    support_height = sum(fit.height + 8 for _, fit in details) + (rule_gap + 16 if details else 0)
+    quote = tf.fit(page['lines'], theme.f_body, 40, width,
+                   bottom - top - header_height - support_height - 18,
+                   minimum=24, bold=True, ls=1.15, role='quote body')
+    original_tail = ' '.join(tf.source_text(page['lines']).splitlines()[-1].split())
+    if (len(quote.lines) > 1 and len(quote.lines[-1].split()) == 1
+            and original_tail.endswith(' '.join(quote.lines[-2:]))):
+        # Rebalance a wrapped final paragraph while preserving authored breaks.
+        previous = quote.lines[-2].rsplit(maxsplit=1)
+        if len(previous) == 2 and len(previous[0].split()) >= 2:
+            tail = f'{previous[1]} {quote.lines[-1]}'
+            if tm.advance(tail, quote.font, quote.size, quote.bold) <= quote.width:
+                from dataclasses import replace
+                quote = replace(quote, lines=(*quote.lines[:-2], previous[0], tail))
+    group_height = header_height + quote.height + support_height
+    y = top + (bottom - top - group_height) * .42
+    accent = theme.display_ink if theme.on_red else theme.inkA
+    mark_shape = tf.draw(slide, x, y, 100, mark, theme, role='quote-mark', color=accent)[0]
+    if page.get('art_direction', {}).get('quote_screen', True):
+        from deck_marks import quote_screen
+        mark_ink = tm.tight_rect(mark_shape, mode='ink')
+        quote_screen(slide, mark_ink[2] + 20, mark_ink[1], accent)
+    y += header_height
+    shape = tf.draw(slide, x, y, width, quote, theme, role='quote-body')[0]
+    ink = tm.tight_rect(shape, mode='ink')
+    rect(slide, x - 22, ink[1], 4, max(8, ink[3] - ink[1]), fill=accent)
+    if details:
+        y += quote.height + rule_gap
+        dashed(slide, x, y, x + width, y, theme.front_ink)
+        y += 16
+        for role, fitted in details:
+            tf.draw(slide, x, y, width, fitted, theme, role=role)
+            y += fitted.height + 8
 
 
 def p_grid(s, spec, th, idx, total, meta):
@@ -574,14 +685,17 @@ def p_closing(s, spec, th, idx, total, meta):
 
 
 def p_infographic(slide, spec, th, idx, total, meta):
-    """The same native evidence primitives and glyphs as the poster route."""
-    from infographic import make_plan
-    from poster_direction import draw
+    """Deck-specific planning and writing; shared evidence primitives remain read-only."""
+    from deck_layout import make_plan
+    from deck_renderer import apply_colors, draw
     if spec.get('chart_backend','shapes')!='shapes':raise ValueError('native charts are not validated; use chart_backend: shapes')
     direction=dict(spec.get('art_direction',{}));ladder=meta.get('type_scale',{})
     direction.setdefault('body_size',ladder.get('body',20));direction.setdefault('title_size',ladder.get('title',44))
     direction.setdefault('dialect',meta.get('evidence_dialect','swiss'));direction.setdefault('columns',min(2,len(spec['modules'])))
-    direction['autofit']=False
+    direction.setdefault('autofit',True)
+    direction['type_plates'] = getattr(th, 'deck_title_plates', None)
+    direction['_editorial'] = getattr(th, 'deck_editorial', False)
+    direction['_paper_mode'] = getattr(th, 'deck_paper_mode', 'off')
     modules=__import__('copy').deepcopy(spec['modules'])
     title=spec['title']
     charts=[m for m in modules if m.get('visual') in ('bar-compare','bar-vertical','line-chart','ring','stacked-bar')]
@@ -592,25 +706,48 @@ def p_infographic(slide, spec, th, idx, total, meta):
     for m in modules:
         if m.get('headline')==spec['title']:m['render_heading']=False
     candidate=dict(content=dict(title=title,modules=modules),
-                        canvas=dict(width=PAGE_W,height=PAGE_H,safe=list(SAFE)),
-                        meta=dict(lang=meta.get('lang','en'),fonts=meta.get('fonts'),seed=meta.get('seed',1)),
+                        canvas=dict(width=PAGE_W,height=PAGE_H,safe=SAFE),
+                        meta=dict(lang=meta.get('lang', th.lang),fonts=meta.get('fonts'),seed=meta.get('seed',1)),
                         evidence=spec.get('evidence',{}),art_direction=direction)
-    try:plan=make_plan(candidate)
-    except ValueError:
-        # Same measured writer and 18pt floor; copy and module count stay intact.
-        if direction['body_size']<=18:raise
-        direction['body_size']=18;plan=make_plan(candidate)
-        plan['autofit']['changes'].append('Deck body fitted to 18pt readability floor after measuring the requested ladder')
+    paper_mode, body_size = direction['_paper_mode'], direction['body_size']
+    paper_layout = direction.get('paper_layout', 'auto')
+    attempts = [(paper_mode, paper_layout, body_size)]
+    # Return the space reserved for the paper before shrinking body type.
+    if paper_mode != 'off':
+        if paper_layout != 'single' and any(m.get('visual') == 'takeaway-list' for m in modules):
+            attempts.append((paper_mode, 'single', body_size))
+        attempts.append(('off', 'single', body_size))
+    if body_size > 18:
+        attempts.append(('off', 'single', 18))
+    for index, (mode, layout, size) in enumerate(attempts):
+        direction.update(_paper_mode=mode, paper_layout=layout, body_size=size)
+        first_shape = len(slide.shapes)
+        palette = dict(th.t)
+        try:
+            plan = make_plan(candidate)
+            apply_colors(plan, th)
+            draw(slide, plan, th)
+            if any(len(m.get('paper_panels', ())) > 1 for m in plan['module_metrics']):
+                from layout_check import check_slide
+                report = check_slide(slide, idx, archetype=spec['archetype'])
+                if any(f.startswith('largest quiet rectangle') for f in report['fails']):
+                    raise ValueError('Staggered paper cards leave too little quiet space')
+        except ValueError:
+            for shape in list(slide.shapes)[first_shape:]:
+                shape._element.getparent().remove(shape._element)
+            th.t.clear()
+            th.t.update(palette)
+            if index == len(attempts) - 1:
+                raise
+        else:
+            if paper_mode != mode:
+                plan['autofit']['changes'].append('Paper panel omitted to preserve measured list capacity')
+            elif paper_layout != layout:
+                plan['autofit']['changes'].append('One paper sheet retained to preserve measured list capacity')
+            if body_size != size:
+                plan['autofit']['changes'].append('Deck body fitted to the 18pt readability floor')
+            break
     plan['source_modules']=spec['modules']
-    mapping={plan['ink_plan']['main'][0]:th.inkA,plan['ink_plan']['main'][1]:th.inkB,
-             plan['ink_plan']['body']:th.text,plan['ink_plan']['accent']:th.accent1,
-             plan['ink_plan']['paper']:th.paper}
-    for o in plan['objects']:
-        for key in ('color','fill','line','background'):
-            if o.get(key) in mapping:o[key]=mapping[o[key]]
-        for key in ('color','fill','line'):
-            if o.get(key) and o[key] not in th.t.values():th.t['evidence-'+str(len(th.t))]=o[key]
-    draw(slide,plan,th)
     if not hasattr(th,'evidence_pages'):th.evidence_pages=[]
     th.evidence_pages.append(dict(page=idx,plan=plan))
 
@@ -621,6 +758,29 @@ ARCHETYPES = {
     "numbered": p_numbered, "timeline": p_timeline, "ask": p_ask,
     "statement": p_statement, "closing": p_closing, "infographic": p_infographic,"chart":p_infographic,"versus":p_infographic,
 }
+
+
+def page_writer(page, archetype):
+    modules = page.get('modules', [])
+    if not modules or archetype == 'cover' or page.get('editorial'):
+        return ARCHETYPES[archetype]
+    # A section label alone uses the classic reverse-number divider.
+    if (archetype == 'divider' and len(modules) == 1 and
+            not modules[0].get('body') and not modules[0].get('visual_data')):
+        return p_divider
+    return p_infographic
+
+
+def draw_content(slide, page, theme, number, total, meta, writer, storyboard):
+    try:
+        writer(slide, page, theme, number, total, meta)
+    except ValueError:
+        from deck_press_chart import PRESS_FORMS
+        if not storyboard or theme.lang != 'en' or writer is not p_infographic or not any(
+                module.get('visual') in PRESS_FORMS for module in page.get('modules', [])):
+            raise
+        press = dict(page, art_direction=dict(page.get('art_direction', {}), _press_chart=True))
+        writer(slide, press, theme, number, total, meta)
 
 
 def write_style(out_path, spec, theme, manifest, extra=None):
@@ -656,7 +816,7 @@ def check(spec):
     """Measure every page in memory; return all page failures in one call."""
     meta=spec.get('meta',{})
     theme=Theme(palette=meta.get('palette','G'),palette_hex=meta.get('palette_hex'),
-                lang=meta.get('lang','zh'),fonts=meta.get('fonts'),print_grammar=meta.get('print_grammar','light'))
+                lang=deck_language(spec),fonts=meta.get('fonts'),print_grammar=meta.get('print_grammar','light'))
     results=[]
     for i,page in enumerate(spec.get('pages',[]),1):
         prs=new_deck();slide=add_page(prs,None)
@@ -664,7 +824,8 @@ def check(spec):
         try:
             if arch not in ARCHETYPES:raise ValueError(f'unknown archetype {arch!r}')
             theme.on_red=bool(page.get('reverse',arch in ('divider','closing')))
-            (p_infographic if page.get('modules') and arch!='divider' else ARCHETYPES[arch])(slide,page,theme,i,len(spec['pages']),meta)
+            draw_content(slide,page,theme,i,len(spec['pages']),meta,
+                         page_writer(page, arch),bool(spec.get('storyboard')))
             results.append({'page':i,'archetype':arch,'ok':True,'slots':[
                 {'role':t['shape'].name,'rect':[round(v,1) for v in t['rect']]} for t in tm.audit(slide)]})
         except (ValueError,KeyError,TypeError) as exc:
@@ -680,7 +841,11 @@ def build(spec, out_path, base_dir=None):
     meta = spec.get("meta", {})
     th = Theme(palette=meta.get("palette", "G"), palette_hex=meta.get("palette_hex"),
                print_grammar=meta.get("print_grammar", "light"),
-               lang=meta.get("lang", "zh"), fonts=meta.get("fonts"))
+               lang=deck_language(spec), fonts=meta.get("fonts"))
+    if spec.get('storyboard') and th.lang.lower().startswith('en'):
+        if 'heading' not in (meta.get('fonts') or {}):
+            th.fonts['heading'] = th.f_display
+        meta = dict(meta, fonts=th.fonts)
     out,sidecar,media=aio.paths(out_path)
     out.parent.mkdir(parents=True,exist_ok=True)
     manifest=None
@@ -695,17 +860,19 @@ def build(spec, out_path, base_dir=None):
         # A spec without prebuilt media still receives deterministic paper;
         # existing external background plans remain supported unchanged.
         import make_textures as mt
+        from deck_print import page_field
         colors=meta.get('palette_hex').split(',') if meta.get('palette_hex') else mt.PALETTES[th.palette]
         ctx=mt.Ctx(PAGE_W,PAGE_H,2,colors)
         records=[]
         import hashlib
         for i,page in enumerate(spec.get('pages',[]),1):
-            reverse=bool(page.get('reverse',page.get('archetype') in ('divider','closing')))
-            bg,_=mt.render_page(ctx,{'paper_only':True,'registration_marks':False,'reverse':reverse},meta.get('seed',1),i)
+            field = page_field(spec, page, i, th.lang == 'en')
+            reverse = field['reverse']
+            bg, treatment = mt.render_page(ctx, field, meta.get('seed', 1), i)
             bg_path=media/f'bg{i}.jpg';mt.save_img(bg,str(bg_path),'jpg',70)
             blob=bg_path.read_bytes()
             records.append({'page':i,'file':bg_path.name,'reversed':reverse,'bytes':len(blob),
-                            'sha256':hashlib.sha256(blob).hexdigest()[:16],**mt.ink_stats(bg)})
+                            'sha256':hashlib.sha256(blob).hexdigest()[:16],'treatment':treatment,**mt.ink_stats(bg)})
         manifest={'palette':th.palette,'tokens':th.t,'scale':2,'recommended_render_width':1920,'pages':records,'total_bytes':sum(r['bytes'] for r in records)}
         (media/'manifest.json').write_text(json.dumps(manifest),encoding='utf-8')
     manifest_path=aio.input_path(meta['bg_manifest'],base_dir,'background manifest') if meta.get('bg_manifest') else media/'manifest.json'
@@ -719,7 +886,7 @@ def build(spec, out_path, base_dir=None):
 
     # ---- dialect + density: decided once per deck, from content and scenario
     skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    history = compose.load_history(skill_dir)
+    history = compose.load_history(skill_dir, artifact="deck")
     scenario = meta.get("scenario", compose.DEFAULT_SCENARIO)
     blob = meta.get("title", "") + " " + " ".join(
         str(p.get(k, "")) for p in spec.get("pages", [])
@@ -748,6 +915,17 @@ def build(spec, out_path, base_dir=None):
     total = meta.get("total", len(pages))
     prs = new_deck()
     deck_records = []
+    blocked_records = []
+    impression_records = []
+    collage_records = []
+    auto_collage_pages = []
+    from deck_refinements import featured_quote, revise, sparse_cutaway
+    feature = featured_quote(pages, reversed_pages)
+    rendered_quotes = []
+    cutaway_pages = []
+    refinement_colors = set()
+    refinement_fallbacks = []
+    from deck_print import chrome_foreground
     for i, page in enumerate(pages, 1):
         slide = add_page(prs, None)
         arch = page.get("archetype", "data")
@@ -756,13 +934,36 @@ def build(spec, out_path, base_dir=None):
                              f"known: {sorted(ARCHETYPES)}")
         on_red = i in reversed_pages
         th.on_red = on_red
+        direction = page.get('art_direction', {})
+        th.deck_editorial = bool(spec.get('storyboard')) and th.lang == 'en'
+        pool = page.get('element_pool', meta.get('element_pool'))
+        paper_mode = direction.get('paper_collage', 'off' if pool == [] else 'auto')
+        auto_available = (len(auto_collage_pages) < min(3, max(1, (total + 2) // 3))
+                          and (not auto_collage_pages or auto_collage_pages[-1] != i - 1))
+        th.deck_paper_mode = (paper_mode if th.deck_editorial and want_elements
+                              and (paper_mode == 'on' or auto_available) else 'off')
+        th.deck_title_plates = (direction.get('type_plates', 'spot' if arch == 'cover' or on_red else 'quiet')
+                                if spec.get('storyboard') else None)
         chrome(slide, th, i, total, page.get("header_left", meta.get("header_left", "")),
                page.get("header_right", meta.get("header_right", "")),
                foot_left=meta.get("footer", ""), on_red=on_red,
                items=chrome_items,
+               foreground=chrome_foreground(th) if on_red and th.lang == 'en' else None,
                right_cap=800.0 if arch == "cover" and page.get("sticker")
                else None)
-        (p_infographic if page.get('modules') and arch!='divider' else ARCHETYPES[arch])(slide, page, th, i, total, meta)
+        first_content_shape = len(slide.shapes)
+        writer = page_writer(page, arch)
+        try:
+            draw_content(slide, page, th, i, total, meta, writer, th.deck_editorial)
+        except ValueError as exc:
+            raise ValueError(f"Deck slide {i} ({page.get('id', arch)}): {exc}") from exc
+        original_content = list(slide.shapes)[first_content_shape:]
+        evidence_pages = getattr(th, 'evidence_pages', [])
+        metrics = evidence_pages[-1]['plan']['module_metrics'] if evidence_pages and evidence_pages[-1]['page'] == i else []
+        panels = [panel for m in metrics for panel in m.get('paper_panels', [])]
+        collage_records.extend(dict(panel, page=i, purpose='list-container') for panel in panels)
+        if panels and th.deck_paper_mode == 'auto':
+            auto_collage_pages.append(i)
         # Measure the actual furniture before protecting its background. A
         # footer number must not inherit the corner dot field beneath it.
         from PIL import Image
@@ -772,7 +973,8 @@ def build(spec, out_path, base_dir=None):
         original = find_bg(media, i)
         regions = [r['rect'] for r in tm.audit(slide)]
         background = original
-        if regions:
+        treatment = next((row.get('treatment') for row in (manifest or {}).get('pages', []) if row['page'] == i), None)
+        if regions and treatment != 'paper':
             background = str(media / f'bg{i}-chrome.jpg')
             with Image.open(original) as image:
                 washed = mt.quiet_plate(image, regions, mt.hex2rgb(th.inkA if on_red else th.paper),
@@ -790,6 +992,9 @@ def build(spec, out_path, base_dir=None):
         slide.shapes._spTree.insert(2, picture._element)
         set_notes(slide, page.get("notes", meta.get("notes_default", "")))
         if want_elements:
+            candidates = page.get('element_pool', meta.get('element_pool'))
+            if candidates is None and page.get('composition') in ('classic-cover', 'editorial-quote'):
+                candidates = []
             # pass the audit records, not bare rects: run sizes tell plan_page
             # which pieces of copy are anchors (title / big number / label) so
             # decoration can attach to the content instead of filling gaps
@@ -798,25 +1003,95 @@ def build(spec, out_path, base_dir=None):
                 sizes = [r.font.size.pt
                          for p in t["shape"].text_frame.paragraphs
                          for r in p.runs if r.font.size is not None]
+                # Planner and renderer now share the same resolved language/font.
                 enriched.append({"rect": t["rect"], "text": t["text"],
                                  "size": max(sizes) if sizes else 0.0,
-                                 "duplicate_layer":'riso-layer[back]' in t['shape'].name})
+                                 "duplicate_layer": 'riso-layer[back]' in t['shape'].name})
             enriched.extend(compose.content_obstacles(slide))
             plan = compose.plan_page(page.get("motif", arch), primary, secondary,
                                      scenario, rnd, enriched,
                                      taken_area=chrome_ink,
                                      archetype_kind=arch,
                                      exclusions=page.get('exclude_elements',meta.get('exclude_elements',[])),
-                                     candidates=page.get('element_pool',meta.get('element_pool')))
+                                     candidates=[] if panels else candidates)
+            # Last deck-only protection gate for attached decorations.
+            from place_decor import _rot_bbox
+            import layout as deck_geometry
+            blocked = [item for item in plan if page.get('modules') and any(
+                deck_geometry.overlaps(_rot_bbox(item['rect'], abs(item.get('rot', 0)) + .5),
+                                       region['rect'], pad=10)
+                for region in enriched)]
+            blocked_records.extend(dict(page=i, element=item['name'], rect=item['rect'], reason='planned text collision') for item in blocked)
+            blocked_groups = {item['group'] for item in blocked if item.get('group')}
+            plan = [item for item in plan if item not in blocked
+                    and item.get('group') not in blocked_groups]
+            before_elements = {shape.shape_id for shape in slide.shapes}
             recs = compose.apply_plan(slide, plan, th,
                                       os.path.join(media, "el"),
                                       seed=meta.get("seed", 1), page=i)
+            pictures = [shape for shape in slide.shapes
+                        if shape.shape_id not in before_elements and shape.shape_type == 13]
+            successful = [record for record in recs if 'error' not in record]
+            if len(pictures) != len(successful):
+                raise ValueError('Deck decoration records do not match native pictures')
+            kept = []
+            for picture, record in zip(pictures, successful):
+                if page.get('modules') and any(deck_geometry.overlaps(deck_geometry.obb(picture), region['rect'], pad=10)
+                       for region in enriched):
+                    blocked_records.append(dict(page=i, element=record['element'], rect=list(deck_geometry.obb(picture)), reason='native picture text collision'))
+                    picture._element.getparent().remove(picture._element)
+                else:
+                    kept.append(record)
+            recs = kept + [record for record in recs if 'error' in record]
             for r in recs:
                 r["page"] = i
             deck_records += recs
+        mark_density = direction.get('print_marks', 'off' if pool == [] else 'rich')
+        if th.deck_editorial and want_elements and mark_density != 'off':
+            from deck_impressions import plan_impressions
+            from deck_impression_render import draw as draw_impression
+            occupied = [record['rect'] for record in enriched if record['text']]
+            occupied.extend(record['rect'] for record in compose.content_obstacles(slide))
+            mark_page = dict(page, role='closing' if on_red and i == len(pages) else arch)
+            if panels:
+                mark_page['paper_collage_placed'] = True
+                if mark_density == 'rich':
+                    mark_density = 'balanced'
+            if arch == 'quote' and getattr(th, 'previous_quote_layout', None) != 'classic':
+                mark_page['art_direction'] = dict(direction, quote_screen=False)
+            for number, mark in enumerate(plan_impressions(mark_page, occupied, SAFE, mark_density), 1):
+                draw_impression(slide, mark, th, number)
+                impression_records.append(dict(mark, page=i))
+        if th.lang == 'en' and (th.deck_editorial or page.get('editorial')):
+            result = revise(slide, page, th, i, total, meta, original_content, feature,
+                            rendered_quotes[-1]['layout'] if rendered_quotes else None,
+                            (writer, p_editorial_quote), media)
+            refinement_colors.update(result.get('colors', ()))
+            if result.get('fallback'):
+                refinement_fallbacks.append(dict(page=i, reasons=result['fallback']))
+            if result.get('quote'):
+                rendered_quotes.append(dict(page=i, layout=result['quote']))
+            if result.get('plan'):
+                new_plan = result['plan']
+                evidence_pages[-1]['plan'] = new_plan
+                collage_records = [record for record in collage_records if record['page'] != i]
+                collage_records.extend(dict(panel, page=i, purpose='list-container')
+                                       for metric in new_plan['module_metrics']
+                                       for panel in metric.get('paper_panels', []))
+            cutaway_mode = direction.get('case_collage', 'auto')
+            if (want_elements and pool != [] and (cutaway_mode == 'on' or
+                    (len(cutaway_pages) < 2 and (not cutaway_pages or cutaway_pages[-1] < i-1)))):
+                cutaway = sparse_cutaway(slide, page, th, meta.get('seed', 1)*131+i)
+                if cutaway:
+                    from deck_paper_collage import panel_color
+                    refinement_colors.add(panel_color(th, 'list-paper-face', 'case'))
+                    cutaway_pages.append(i)
+                    collage_records.append(dict(cutaway, page=i))
     if manifest:
         manifest['total_bytes'] = sum(p.get('bytes', 0) for p in manifest['pages'])
         (media/'manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
+    th.t.update({f'local-refinement-{index}': color for index, color in
+                 enumerate(sorted(refinement_colors-set(th.t.values())))})
     aio.save_pptx(prs,out_path)
     write_style(out_path, spec, th, manifest, {
         "dialect": {"primary": primary, "secondary": secondary, "chosen_by": why,
@@ -826,6 +1101,11 @@ def build(spec, out_path, base_dir=None):
                     "band": compose.density_band(scenario,density_level,meta.get("word_band")),
                     **density},
         "elements": deck_records,
+        "blocked_elements": blocked_records,
+        "print_impressions": impression_records,
+        "paper_collage": collage_records,
+        "quote_compositions": rendered_quotes or getattr(th, 'quote_compositions', []),
+        "refinement_fallbacks": refinement_fallbacks,
         "grammar": th.grammar,
         "rhythm_plan": compose.plan_rhythm(pages),
         "evidence_pages":getattr(th,'evidence_pages',[]),
@@ -838,7 +1118,7 @@ def build(spec, out_path, base_dir=None):
         "motifs": [p.get("motif", p.get("archetype")) for p in pages],
         "hero_elements": sorted({r["element"] for r in deck_records
                                  if r.get("role") == "hero"}),
-    })
+    }, artifact="deck")
     return out_path
 
 
@@ -864,7 +1144,7 @@ def main():
     if not args.spec or (not args.out and not args.check):
         ap.error("--spec and --out are required (or use --schema / --design-system)")
     spec = json.load(open(args.spec, encoding="utf-8"))
-    from content_plan import gate
+    from deck_content_plan import gate
     gate(spec,args.content_plan,args.skip_plan,args.spec)
     if args.check:
         result=check(spec)

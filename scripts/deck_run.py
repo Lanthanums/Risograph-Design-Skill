@@ -42,15 +42,24 @@ def run(args):
             if rc:raise ValueError(name+' failed: '+buf.getvalue()[-1800:])
         timed(name,execute)
     try:
-        from content_plan import to_spec,gate
+        from deck_content_plan import compile_plan,gate,text
+        require_storyboard = getattr(args, 'require_storyboard', False)
         if args.plan:
             plan=json.loads(Path(args.plan).read_text(encoding='utf-8-sig'))
             if plan.get('target')!='deck':raise ValueError('deck_run requires target=deck')
-            spec=timed('compile',lambda:to_spec(plan));args.content_plan=args.plan
-        else:spec=json.loads(Path(args.spec).read_text(encoding='utf-8-sig'))
-        status['content_plan']=timed('content-plan',lambda:gate(spec,args.content_plan,args.skip_plan,args.spec))
+            spec, report = timed('compile', lambda: compile_plan(plan, require_storyboard=require_storyboard))
+            args.content_plan = args.plan
+            status['content_plan'] = dict(skipped=True, reason='explicit --skip-plan compatibility escape') if args.skip_plan else report
+        else:
+            spec=json.loads(Path(args.spec).read_text(encoding='utf-8-sig'))
+            status['content_plan']=timed('content-plan',lambda:gate(spec,args.content_plan,args.skip_plan,args.spec,require_storyboard=require_storyboard))
         write(out/'source.json',spec)
         if args.content_plan and Path(args.content_plan).resolve()!=out/'content-plan.json':shutil.copy2(args.content_plan,out/'content-plan.json')
+        if status['content_plan'].get('storyboard'):
+            from deck_storyboard import markdown
+            if not args.plan:
+                plan = json.loads(Path(args.content_plan).read_text(encoding='utf-8-sig'))
+            (out/'storyboard.md').write_text(markdown(plan, text), encoding='utf-8')
         from build_deck import build
         deck=out/'deck.pptx';timed('build',lambda:build(spec,deck,Path(args.spec).resolve().parent if args.spec else Path(args.plan).resolve().parent))
         command('qa',['--deck',deck,'--json',out/'qa.json'])
@@ -69,11 +78,10 @@ def run(args):
                 lambda:command('render',['--deck',deck,'--out',out/'preview','--keep-pdf',*opts]),args.mode))
             command('qa-rendered',['--deck',deck,'--render',out/'preview','--require-render','--json',out/'qa-rendered.json'])
             status.update(status='RENDERED_QA_PASS',render=render_status)
-            from poster_review import review_images,RUBRIC
-            from poster_preview import variants_contact
+            from deck_preview import review_images, RUBRIC, variants_contact
             pngs=sorted((out/'preview').glob('page-*.png'));visual=out/'visual';visual.mkdir(exist_ok=True)
             for png in pngs:
-                row=review_images(png,visual/png.stem);row.update(reviewer='',viewed=dict(full=False,thumbnail=False,blur=False),scores=dict.fromkeys(RUBRIC),weaknesses=[],pptx_sha256=sha(deck),source_sha256=sha(out/'source.json'))
+                row=review_images(png,visual/png.stem);row.update(reviewer='',viewed=dict(full=False,thumbnail=False,blur=False),scores=dict.fromkeys(RUBRIC),weaknesses=[],pptx_sha256=sha(deck),source_sha256=sha(out/'source.json'),plan_sha256=spec.get('content_plan',{}).get('plan_sha256'))
                 write(visual/png.stem/'review.json',row)
             variants_contact(pngs,visual/'contact.png')
         else:status['status']='GEOMETRY_PASS'
@@ -89,19 +97,22 @@ def run(args):
         write(out/'run.json',status);write(out/'timings.json',timings)
         write(out/'summary.json',dict(status=status['status'],render=status['render'],engine_seconds=timings['total'],stages=timings,evidence_level=spec.get('evidence',{}).get('level'),pages=len(spec.get('pages',[])),page_types=[p.get('archetype') for p in spec.get('pages',[])],metrics=[p.get('infographic_metrics') for p in plans],error=status.get('error'),visual_review=status['visual_review']))
         from input_cache import output_files
-        files=[p for p in output_files(out,'deck',status['render']!='NOT_REQUESTED') if p.name!='run-manifest.json']
+        storyboard = bool(status.get('content_plan', {}).get('storyboard'))
+        files=[p for p in output_files(out,'deck',status['render']!='NOT_REQUESTED',storyboard=storyboard) if p.name!='run-manifest.json']
         write(out/'run-manifest.json',dict(engine_version=engine_version(),status=status['status'],artifact_hashes={p.relative_to(out).as_posix():sha(p) for p in files},stages=stages,fonts=font_rows,parameters=dict(out=str(out),draft=args.draft,mode=args.mode),exit_code=int(status['status']=='FAILED')))
     return status
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     for k in ('spec','plan','content-plan','out','kit','node'):ap.add_argument('--'+k)
-    for k in ('auto','render','draft','system','autodiscover','skip-plan'):ap.add_argument('--'+k,action='store_true')
+    for k in ('auto','render','draft','system','autodiscover','skip-plan','require-storyboard'):ap.add_argument('--'+k,action='store_true')
     ap.add_argument('--mode',choices=['fast','audit'],default='fast');ap.add_argument('--dpi',type=int,default=110)
     a=ap.parse_args()
     if not a.out or not (a.plan or a.spec):ap.error('--out and --plan/--spec required')
     if a.plan and a.spec:ap.error('choose --plan or --spec')
+    if a.skip_plan and a.require_storyboard:ap.error('--skip-plan cannot be combined with --require-storyboard')
     if a.system and (a.kit or a.autodiscover):ap.error('--system is exclusive with --kit/--autodiscover')
+    a.system = not (a.kit or a.autodiscover)
     from input_cache import key,restore,store
     options={k:v for k,v in vars(a).items() if k not in ('spec','plan','content_plan','out','mode')};options['artifact']='deck'
     cache,payload=key(dict(spec=a.spec,plan=a.plan or a.content_plan),options)

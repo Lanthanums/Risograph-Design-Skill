@@ -1,6 +1,6 @@
-# Riso Slides v4.0
+# Riso Slides v4.5
 
-从原稿生成可编辑的 Risograph 信息海报与演示文稿。运行时版本 **4.0.0**。
+从原稿生成可编辑的英文 Risograph 演示文稿与独立海报。运行时版本 **4.5**。
 入口为 [SKILL.md](SKILL.md)，另有 [English README](README.md)。
 
 需要 Python 3.10+，安装 requirements.txt。最终预览需要 LibreOffice 与可用的
@@ -9,12 +9,13 @@ PDF 栅格化工具；单页海报支持校验尺寸后直接导出 PNG。参阅
 ```bash
 python scripts/doctor.py --out OUTPUT
 python scripts/poster_run.py --plan content-plan.json --out OUTPUT --auto
-python scripts/deck_run.py --plan deck-content-plan.json --out DECK_OUTPUT --auto
+python scripts/deck_run.py --plan deck-content-plan.json --require-storyboard --out DECK_OUTPUT --auto
 ```
 
-先按[内容规划](references/content-planning.md)建立来源绑定、原文清单和覆盖账本。
-定稿保持原文，改写记录合并、压缩或删除的原因。证据密度决定预算和可编辑形式；
-低数据稿件采用文字形式，不补造图表、数字或标签。已有 spec 转换见[输入格式](references/input-formats.md)。
+在读取参考资料前先确定交付物。默认进入 [PowerPoint 分镜工作流](references/deck-workflow.md)。
+明确要求独立海报时进入[海报工作流](references/poster-workflow.md)。
+两路分别建立来源绑定、规划内容、设计与验收。定稿保持原文，改写记录合并、
+压缩或删除的原因。已有 spec 转换见[输入格式](references/input-formats.md)。
 
 规划阶段使用 --draft。两条管线默认系统 LibreOffice，也可指定 --autodiscover 或 kit。
 输入缓存与共享渲染缓存均校验完整性；--mode audit 重新构建、实际转换并运行 QA。

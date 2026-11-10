@@ -69,6 +69,9 @@ def make_plan(spec,_vertical_pass=False):
     # Safe full-line rule outside the glyph envelope, never across uppercase letters.
     rule=path('title-rule',[[[x,cy-8],[x+min(w,title['fit']['width']),cy-8]]],ink['accent'],'emphasis',anchor='title',micro=True,vocabulary='underline')
     rule['line_width']=4
+    if a.get('ornament') == 'focused':
+        rule['line_width'] = 2.5
+        rule['line'] = ink['main'][1]
     mains=[(i,m) for i,m in enumerate(modules) if m.get('level')!=4 and not (m.get('level')==1 and (m.get('role')=='title' or text(m)==c['title']))]
     foot=[(i,m) for i,m in enumerate(modules) if m.get('level')==4]
     # Semantic groups are indivisible bands. Process/timeline and high-weight heroes
@@ -170,8 +173,12 @@ def make_plan(spec,_vertical_pass=False):
     p['effective_controls']={k:dict(requested=a.get(k,'auto'),effective=v) for k,v in [('body_size',body),('skeleton','bands'),('columns',columns),('dialect',dialect)]}
     p['composition_signature']=digest([dict(id=o['id'],rect=o['rect']) for o in objs])
     p['preflight'].update(words=p['content_words'])
-    from auto_garnish import apply
-    apply(p,a.get('element_density',policy['element_density']))
+    if a.get('ornament') == 'focused':
+        p['element_quota'] = dict(density='focused', suggested_count=[1, 1], minimum_families=1)
+        p['micro_layer'] = [dict(kind='underline', role='title emphasis')]
+    else:
+        from auto_garnish import apply
+        apply(p, a.get('element_density', policy['element_density']))
     p['infographic_metrics']=assess(p)
     from evidence_style import signature
     p['infographic_metrics']['dialect_signature']=signature(p)

@@ -387,7 +387,10 @@ def budget_checks(rep, slide, i, args, canvas=None):
         # Both ends are legal, the band between them is not: that is where
         # confetti lives, so nothing may land in "near" and "far" at once.
         try:
-            import compose
+            if canvas.artifact == 'poster':
+                import poster_legacy_compose as compose
+            else:
+                import compose
             rects = [t["rect"] for t in tm.audit(slide, mode="ink")]
             gaps = compose.free_rects(rects, lay.TEXT_PROTECTION, canvas=canvas)[:3]
             biggest = max(lay.area(lay.obb(s2)) for s2 in deco)

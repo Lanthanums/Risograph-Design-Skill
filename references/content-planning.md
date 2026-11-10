@@ -1,4 +1,4 @@
-# Stage 0: content before composition
+# Poster content before composition
 
 Every runner build requires a passing content-plan.json bound to its source and spec.
 Use `--skip-plan` only for an explicit legacy reproduction; the manifest records it.
@@ -12,7 +12,7 @@ No network or language model is called by the planning utility.
 4. Give equivalent claims a common `fact_key`; present each fact once.
    A statistic belongs in its visual data, not repeated in a prose paragraph.
 5. Assign L1 title + evidence-supported hero (≤2), evidence-scaled L2 primary modules,
-   L3 supporting modules (≤8), L4 footer information. Deck pages support 1–4 modules.
+   L3 supporting modules (≤8), L4 footer information.
 6. Metadata uses weight ≤.35 in a footer ticket. It must not compete with evidence.
 7. Group parallel modules with the same `group` and consecutive `order`.
    Process order is explicit. The compiler retains `keep_together`.
@@ -34,7 +34,7 @@ No network or language model is called by the planning utility.
 
 ## Copy modes
 
-`verbatim`: final poster/deck copy. Every atom must be kept unchanged. Overflow
+`verbatim`: final poster copy. Every atom must be kept unchanged. Overflow
 does not authorize paraphrasing or deletion. Use editorial for dense legacy copy.
 Duplicate source copy warns in verbatim mode; removing it requires author adaptation.
 `adapt`: default choice when the input is a speech, article or rough summary.
@@ -79,11 +79,6 @@ paths. If visual is omitted, the compiler chooses the information-type default.
 Ledger entries have atom, status, into (module ID array), reason.
 Use `content_plan.scaffold` to obtain the inventory and source hash; do not handwrite hashes.
 An output mutation invalidates the binding. Recompile after modifying the plan.
-
-Deck plans use `target: deck`; sections declare `slide_kind: section`, content slides
-have one assertion, 1–4 evidence-bound modules and separate `notes`. The generated
-outline records the source atom IDs. Old deck specs migrate verbatim without changing
-their existing page types. Outline review must check the truth of each assertion.
 
 ## Gate boundaries
 

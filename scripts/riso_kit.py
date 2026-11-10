@@ -777,14 +777,14 @@ CHROME_SETS = {
 
 
 def chrome(slide, theme, idx, total, left, right, foot_left=None,
-           on_red=False, items=None, right_cap=None):
+           on_red=False, items=None, right_cap=None, foreground=None):
     """Header/footer furniture, drawn from the deck-wide chrome set.
 
     Labels must stay on one line: the font size is shrunk to the measured
     width rather than letting the label wrap onto a rule. `right_cap` pulls
     the right label's right edge in (e.g. a cover's corner sticker lives at
     x 812+, so the label must stop short of it instead of overlapping)."""
-    fg = theme.paper if on_red else theme.text
+    fg = foreground or (theme.paper if on_red else theme.text)
     g = theme.print_grammar
     items = items or CHROME_SETS.get(g, CHROME_SETS["light"])
 

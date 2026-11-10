@@ -1,7 +1,7 @@
-# Riso Slides v4.0
+# Riso Slides v4.5
 
-Create editable Risograph information posters and presentation decks from supplied
-content. Runtime version: **4.0.0**. Start with [SKILL.md](SKILL.md).
+Create editable English Risograph presentations and standalone posters from supplied
+content. Runtime version **4.5**. Start with [SKILL.md](SKILL.md).
 [中文说明](README_zh.md).
 
 Use Python 3.10+ and install requirements.txt. Final previews need LibreOffice
@@ -11,13 +11,15 @@ direct PNG export. See [environment setup](references/harnesses.md).
 ```bash
 python scripts/doctor.py --out OUTPUT
 python scripts/poster_run.py --plan content-plan.json --out OUTPUT --auto
-python scripts/deck_run.py --plan deck-content-plan.json --out DECK_OUTPUT --auto
+python scripts/deck_run.py --plan deck-content-plan.json --require-storyboard --out DECK_OUTPUT --auto
 ```
 
-Author a source-bound [content plan](references/content-planning.md) before layout.
-Approved copy stays verbatim; adaptations retain an atom inventory and coverage
-ledger. Evidence controls budgets and editable forms. Low-data text does not
-authorize invented charts, values or labels. See [input formats](references/input-formats.md).
+Select the deliverable before opening source material. Use the
+[PowerPoint storyboard workflow](references/deck-workflow.md) by default.
+Use the [poster workflow](references/poster-workflow.md) for a requested
+standalone poster. Each workflow has its own source plan, design and review.
+Approved copy stays verbatim. Adaptations retain an atom inventory and coverage
+ledger. See [input formats](references/input-formats.md) for compatibility.
 
 Use --draft while planning. Both runners default to system LibreOffice; choose
 --autodiscover or an explicit kit when needed. Verified input and render caches

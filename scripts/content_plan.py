@@ -232,13 +232,14 @@ def annotate(plan):
     return plan
 
 def to_spec(plan):
+    if plan.get('target') == 'deck':
+        from deck_content_plan import to_spec as compile_deck
+        return compile_deck(plan)
     result=lint(plan)
     if not result['ok']:raise ValueError('\n'.join(result['errors']))
     if plan.get('mode')=='editorial':
         spec=copy.deepcopy(plan['source'])
         if plan.get('target')=='poster':spec['mode']='editorial'
-    elif plan.get('target','poster')=='deck':
-        spec=deck_outline(plan)
     else:
         content={'title':plan['thesis'],'modules':copy.deepcopy(plan['modules'])}
         for module in content['modules']:
@@ -255,49 +256,19 @@ def to_spec(plan):
                               output_sha256=digest(spec.get('content',spec.get('pages'))))
     spec['evidence']=result['evidence']
     spec['evidence']['legacy']='evidence' not in plan
-    from evidence_scale import scale
-    spec.setdefault('art_direction',{}).setdefault('element_density',scale(result['evidence']['level'])['element_density']) if plan.get('target','poster')=='poster' and plan.get('mode')!='editorial' else None
+    if spec.get('mode') == 'infographic' and plan.get('target', 'poster') == 'poster':
+        from evidence_scale import scale
+        direction = spec['art_direction']
+        if spec.get('meta', {}).get('lang') == 'en' and 'element_density' not in direction:
+            direction.setdefault('ornament', 'focused')
+        direction.setdefault('element_density', scale(result['evidence']['level'])['element_density'])
     return spec
 
 def deck_outline(plan):
-    from collections import OrderedDict
-    from source_profile import choose_form,DATA_FORMS
-    evidence=evidence_for(plan);evidence['legacy']='evidence' not in plan
-    prof=evidence['profile'];groups=OrderedDict();pages=[];slides=[];text_groups={}
-    for original in plan['modules']:
-        if original.get('level')==4:continue
-        m=copy.deepcopy(original);m.setdefault('visual',choose_form(m,prof) if 'evidence' in plan else VISUALS.get(m.get('info_type'),'text'));m['evidence_basis']=module_basis(m,prof)
-        key=m.get('page',m['id'])
-        if 'page' not in m and m.get('level')!=1 and m['visual'] not in DATA_FORMS and len(m.get('atoms',[]))==1:
-            root=m['atoms'][0].split('.')[0];chunk=text_groups.get(root,0)
-            key=f'text:{root}:{chunk}'
-            # Keep a source paragraph family on a shared content slide, within
-            # measured copy limits. No renamed repeated single-module slides.
-            if len(groups.get(key,[]))>=2:
-                chunk+=1;text_groups[root]=chunk;key=f'text:{root}:{chunk}'
-        groups.setdefault(key,[]).append(m)
-    for page_id,modules in groups.items():
-        if len(modules)>4:raise ValueError(f'{page_id}: deck page supports 1..4 modules')
-        forms={m['visual'] for m in modules};first=modules[0];title=first.get('headline') or first.get('body')
-        if first.get('slide_kind')=='section':arch='divider'
-        elif forms & {'bar-compare','bar-vertical','line-chart','ring','stacked-bar','pictogram-row'}:arch='chart'
-        elif forms & {'big-number','stat-tile','stat-row'}:arch='data'
-        elif forms & {'timeline'}:arch='timeline'
-        elif forms & {'step-flow','takeaway-list'}:arch='numbered'
-        elif forms & {'contrast-pair','versus','before-after'}:arch='versus'
-        elif forms & {'pull-quote'}:arch='quote'
-        else:arch='statement' if len(modules)==1 else 'features' if len(modules)<=3 else 'grid'
-        page=dict(id=page_id,archetype=arch,title=title,modules=modules,notes='\n'.join(m.get('notes','') for m in modules),element_pool=[],evidence=evidence,
-                  art_direction=copy.deepcopy(plan.get('art_direction',{})),chart_backend=plan.get('chart_backend','shapes'))
-        if arch=='divider':page['index']=str(len(pages)+1)
-        pages.append(page);slides.append(dict(id=page_id,assertion=title,archetype=arch,evidence_forms=sorted(forms),atoms=[a for m in modules for a in m['atoms']]))
-    meta=copy.deepcopy(plan.get('meta',{}))
-    if 'evidence' in plan:
-        dialect=plan.get('art_direction',{}).get('dialect',meta.get('evidence_dialect','swiss'))
-        if dialect=='auto':dialect='swiss'
-        meta['evidence_dialect']=dialect
-        meta.setdefault('dialect',[{'swiss':'C','collage':'A','doodle':'B'}.get(dialect,'C')])
-    return dict(meta=meta,pages=pages,outline=slides,evidence=evidence)
+    """Compatibility alias for callers of the original unified compiler."""
+    from deck_content_plan import deck_outline as compile_outline
+    return compile_outline(plan)
+
 
 def save(plan,path):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)

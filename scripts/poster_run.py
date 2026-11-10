@@ -41,7 +41,8 @@ def run(spec,out,render=False,mode='fast',autofit=True,verbose=False,plan_only=F
         if content_plan:shutil.copyfile(content_plan,out/'content-plan.json') if Path(content_plan).resolve()!=out/'content-plan.json' else None
         s=timed('validate',lambda:normalize(raw,path.parent))
         s.setdefault('art_direction',{});s['art_direction']['autofit']=autofit
-        if element_density:s['art_direction']['element_density']=element_density
+        if element_density:
+            s['art_direction'].update(element_density=element_density, ornament='classic')
         write(out/'source.json',s)
         p=timed('plan',lambda:make_plan(s));write(out/'poster.plan.json',p)
         write(out/'preflight.json',preflight(s,plan=p))
@@ -193,8 +194,10 @@ def main():
     if a.spec and a.plan:ap.error('choose --spec or --plan')
     if a.plan and (a.preflight or a.variants):
         from content_plan import to_spec
+        plan=json.loads(Path(a.plan).read_text(encoding='utf-8-sig'))
+        if plan.get('target','poster')!='poster':ap.error('Use deck_run.py for target=deck')
         target=Path(a.out or Path(a.plan).resolve().parent);target.mkdir(parents=True,exist_ok=True)
-        a.spec=str(target/'compiled-spec.json');write(a.spec,to_spec(json.loads(Path(a.plan).read_text(encoding='utf-8-sig'))));a.content_plan=a.plan
+        a.spec=str(target/'compiled-spec.json');write(a.spec,to_spec(plan));a.content_plan=a.plan
     if a.preflight:
         from build_poster import normalize
         from poster_flow import preflight

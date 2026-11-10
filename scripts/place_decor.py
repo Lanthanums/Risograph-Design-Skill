@@ -165,10 +165,12 @@ class Placer:
         self._pools = self._split_pools(primary, secondary)
 
     # ---------------------------------------------------------------- pools
-    @staticmethod
-    def _split_pools(primary, secondary):
+    def _split_pools(self, primary, secondary):
         """Rule F: primary pool and a strictly rationed secondary pool."""
-        import compose
+        if self.canvas.artifact == 'poster':
+            import poster_legacy_compose as compose
+        else:
+            import compose
         full = compose.element_pool(primary, secondary)
         prim_names = {n for _r, n in compose.element_pool(primary, primary)}
         main = [(r, n) for r, n in full if n in prim_names]
@@ -465,6 +467,9 @@ class Placer:
         return 0
 
     def _free_boxes(self):
-        import compose
+        if self.canvas.artifact == 'poster':
+            import poster_legacy_compose as compose
+        else:
+            import compose
         extra = [o["rect"] for o in self.placed]
         return compose.free_rects(self.rects + extra, TEXT_PAD, canvas=self.canvas)

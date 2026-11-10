@@ -5,7 +5,7 @@ from pathlib import Path
 def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def dump(path,value):Path(path).write_text(json.dumps(value,ensure_ascii=False,indent=2),encoding='utf-8')
 
-def output_files(out,artifact='poster',rendered=False):
+def output_files(out,artifact='poster',rendered=False,*,storyboard=False):
     """Explicit generated-file inventory; never cache unrelated user files."""
     out=Path(out)
     names={'source.json','compiled-spec.json','content-plan.json','run.json','summary.json',
@@ -13,6 +13,8 @@ def output_files(out,artifact='poster',rendered=False):
            artifact+'.pptx',artifact+'.style.json','preflight.json','plan-summary.json',
            'poster.plan.json','qa.log','layout_check.log'}
     folders={artifact+'-media'}
+    if artifact == 'deck' and storyboard:
+        names.add('storyboard.md')
     if rendered:
         names.update(('qa-rendered.json','qa-rendered.log','render.log','evidence-presence.json'))
         folders.update(('preview','visual'))
@@ -22,9 +24,30 @@ def output_files(out,artifact='poster',rendered=False):
                   and not any(x.startswith('.') or x=='__pycache__' for x in p.relative_to(out).parts)
                   and (p.relative_to(out).as_posix() in names or p.relative_to(out).parts[0] in folders))
 
+# Rendering, fonts, vector primitives, legacy element placement and source
+# evidence parsing are common infrastructure. Composition code is route-local.
+POSTER_FILES = {
+    'auto_garnish', 'build_poster', 'content_plan', 'evidence_forms',
+    'evidence_scale', 'evidence_style', 'infographic',
+}
+
+
+def pipeline_code(root, artifact):
+    files = {}
+    for path in sorted(root.glob('*.py')):
+        stem = path.stem
+        is_deck = stem.startswith('deck_') or stem in ('build_deck', 'compose')
+        is_poster = stem.startswith('poster_') or stem in POSTER_FILES
+        if (artifact == 'deck' and is_poster) or (artifact == 'poster' and is_deck):
+            continue
+        files[path.name] = sha(path)
+    return files
+
+
 def key(inputs,options):
     root=Path(__file__).resolve().parent
-    code={p.name:sha(p) for p in sorted(root.glob('*.py'))}
+    artifact = options.get('artifact', 'poster')
+    code = pipeline_code(root, artifact)
     code['VERSION']=(root.parent/'VERSION').read_text().strip()
     environment={k:v for k,v in os.environ.items() if k.startswith(('RISO','FONT','LIBREOFFICE'))}
     # Executable identity without importing a renderer or invoking a process.
@@ -37,17 +60,31 @@ def key(inputs,options):
     assets={}
     def walk(value,base):
         if isinstance(value,dict):
-            for v in value.values():walk(v,base)
+            for entry in value.values():
+                walk(entry, base)
         elif isinstance(value,list):
             for v in value:walk(v,base)
-        elif isinstance(value,str) and len(value)<4096 and Path(value).suffix.lower() in ('.png','.jpg','.jpeg','.svg','.ttf','.otf','.ttc','.js','.exe','.com'):
+        elif isinstance(value,str) and len(value)<4096 and Path(value).suffix.lower() in ('.png','.jpg','.jpeg','.svg','.ttf','.otf','.ttc','.js','.exe','.com','.json'):
             p=Path(value);p=p if p.is_absolute() else base/p
             if p.is_file():assets[str(p.resolve())]=sha(p)
     for path in inputs.values():
         if path:
             p=Path(path)
-            try:walk(json.loads(p.read_text(encoding='utf-8-sig')),p.resolve().parent)
-            except ValueError:pass
+            try:
+                document = json.loads(p.read_text(encoding='utf-8-sig'))
+            except ValueError:
+                continue
+            base = p.resolve().parent
+            walk(document, base)
+            if artifact == 'deck' and isinstance(document, dict):
+                source = document.get('source', {}) if document.get('mode') == 'editorial' else document
+                media = source.get('meta', {}).get('media')
+                if isinstance(media, str):
+                    directory = (base / media).resolve()
+                    if directory.is_dir():
+                        for child in directory.rglob('*'):
+                            if child.is_file():
+                                assets[str(child.resolve())] = sha(child)
     # Explicit and registered kit/node changes must invalidate complete-run hits,
     # even when the path and the input JSON remain unchanged.
     configured={}
@@ -64,7 +101,7 @@ def key(inputs,options):
     payload=dict(code=code,inputs={k:sha(v) for k,v in inputs.items() if v},assets=assets,options=options,packages=packages,environment=environment,renderer=renderer,configured_renderer=configured,fonts=catalog,python=sys.version,platform=dict(sys_platform=sys.platform,os_name=os.name,architecture=os.environ.get('PROCESSOR_ARCHITECTURE','')))
     digest=hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()
     from state_paths import state_path
-    directory=state_path('input-cache')/digest
+    directory=state_path('input-cache')/artifact/digest
     return directory,payload
 
 def restore(directory,out):
@@ -119,7 +156,8 @@ def store(directory,out,payload):
     stage=Path(tempfile.mkdtemp(prefix='.entry-',dir=directory.parent));files={}
     status=json.loads((out/'run.json').read_text(encoding='utf-8'))
     artifact=payload.get('options',{}).get('artifact','poster')
-    for path in output_files(out,artifact,status.get('render','NOT_REQUESTED')!='NOT_REQUESTED'):
+    storyboard = bool(status.get('content_plan', {}).get('storyboard'))
+    for path in output_files(out,artifact,status.get('render','NOT_REQUESTED')!='NOT_REQUESTED',storyboard=storyboard):
         name=path.relative_to(out)
         if not path.is_file() or any(p.startswith('.') for p in name.parts):continue
         if path.suffix.lower() not in ('.json','.png','.jpg','.jpeg','.pptx','.pdf','.log','.md'):continue

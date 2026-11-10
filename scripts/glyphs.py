@@ -1,6 +1,6 @@
 """Shared copyright-free geometric glyphs, drawn as editable native freeforms."""
 import math
-from poster_primitives import bounds
+from native_vectors import bounds
 
 def circle(x,y,r,n=24):
     return [[x+r*math.cos(i*math.tau/n),y+r*math.sin(i*math.tau/n)] for i in range(n+1)]

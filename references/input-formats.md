@@ -1,8 +1,9 @@
 # Input formats
 
 Use one Python interpreter for every command; keep outputs outside the skill.
-Start with [content planning](content-planning.md). Bind numbers, names and quotes
-to the supplied source and record adaptations in the coverage ledger.
+Start in the selected [deck workflow](deck-workflow.md) or
+[poster workflow](poster-workflow.md). Bind numbers, names and quotations to
+the supplied source and record adaptations in the coverage ledger.
 
 ## Existing specs
 
@@ -11,8 +12,9 @@ python scripts/content_plan.py --from-spec INPUT.json --out content-plan.json --
 python scripts/poster_run.py --plan content-plan.json --out OUTPUT --auto
 ```
 
-For decks add `--target deck` to conversion and use `scripts/deck_run.py`.
-Conversion preserves supplied content and existing page types. Dense unchanged
+For decks use `scripts/deck_content_plan.py --from-spec INPUT.json --out PLAN.json`
+and `scripts/deck_run.py --plan PLAN.json --out OUTPUT --auto`. This conversion
+preserves supplied content and page types. Dense unchanged
 poster specs use editorial mode; new information posters use infographic mode.
 Budgets and forms follow the [source evidence profile](evidence-scaling.md).
 Approved copy uses `verbatim`; authorized condensation uses `adapt`.
@@ -22,12 +24,13 @@ Approved copy uses `verbatim`; authorized condensation uses `adapt`.
 
 ```bash
 python scripts/poster_run.py --plan content-plan.json --out OUTPUT --auto
-python scripts/deck_run.py --plan deck-content-plan.json --out DECK_OUTPUT --auto
+python scripts/deck_run.py --plan deck-content-plan.json --require-storyboard --out DECK_OUTPUT --auto
 ```
 
-Use `target: poster` or `target: deck`. Each deck content page has one assertion
-and one to four source-bound modules. Assign the same `page` to group modules,
-use `slide_kind: section` for sections and keep narration in notes.
+Use `target: poster` or `target: deck`. For new decks, plan every page with the
+[storyboard](deck-storyboard.md). Assign the same `page` to group one to four
+source-bound modules. Use `slide_kind: section` for section labels and keep
+narration in notes.
 
 ## Preview and review
 

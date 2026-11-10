@@ -15,7 +15,6 @@ from runtime import prepare
 prepare()
 sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 
-import compose
 from canvas import poster_canvas, POSTER_PRESETS
 import make_textures as mt
 from poster_layouts import choose_family, compose_poster, FAMILIES, TEXT_ROLES
@@ -53,7 +52,8 @@ def normalize(spec,base_dir=None):
         if spec.get('layout',{}).get('graphic')=='band' or meta.get('graphic_element'):raise ValueError('graphic band/element requires enabled elements and a nonempty pool')
         spec['layout']=dict(spec.get('layout',{}),graphic='none')
     if 'graphic_element' in meta:
-        if meta['graphic_element'] not in compose.E.REGISTRY:raise ValueError('Unknown meta.graphic_element')
+        from elements import REGISTRY
+        if meta['graphic_element'] not in REGISTRY:raise ValueError('Unknown meta.graphic_element')
         if spec.get('layout',{}).get('graphic')=='none':raise ValueError('graphic_element requires a graphic band')
         spec['layout']=dict(spec.get('layout',{}),graphic='band')
     if content.get('chart') and (spec.get('family') or meta.get('family','explainer'))!='explainer':raise ValueError('content.chart requires family explainer')
@@ -68,6 +68,7 @@ def normalize(spec,base_dir=None):
 
 def decoration_plan(slide,result,meta,canvas,family,primary,secondary,seed):
     if not meta.get('elements',True):return []
+    import poster_legacy_compose as compose
     items=[]
     audited={t['shape'].name:t for t in tm.audit(slide,mode='ink')}
     for role in result['roles']:
@@ -91,6 +92,7 @@ def plan(spec,base_dir=None):
     if 'art_direction' in spec:
         import poster_direction
         return {'spec':spec,'plan':poster_direction.make_plan(spec)}
+    import poster_legacy_compose as compose
     meta=spec.get('meta',{});content=spec['content'];seed=meta.get('seed',1)
     canvas=poster_canvas(spec.get('canvas'))
     family,why=choose_family(content,spec.get('family') or meta.get('family'),seed)
@@ -105,7 +107,7 @@ def plan(spec,base_dir=None):
     forced=meta.get('dialect')
     if isinstance(forced,str):forced=[forced]
     primary,secondary,why_dialect=compose.pick_dialects(
-        content['title']+' '+str(content.get('body','')),'poster',seed,compose.load_history(),forced,
+        content['title']+' '+str(content.get('body','')),'poster',seed,compose.load_history(artifact='poster'),forced,
         self_key=('poster:'+content['title'],seed))
     decor=decoration_plan(slide,result,meta,canvas,family,primary,secondary,seed)
     placed=any(r.get('group')=='composition' for r in decor)
@@ -169,6 +171,7 @@ def build(spec,out_path,base_dir=None):
     if 'art_direction' in normalized:
         import poster_direction
         return poster_direction.build(normalized,out_path)
+    import poster_legacy_compose as compose
     planning=plan(spec,base_dir)
     spec=planning['spec']
     meta=spec.get('meta',{})
@@ -263,7 +266,7 @@ def build(spec,out_path,base_dir=None):
     aio.write_style(out,style)
     aio.legacy_media_alias(out)
     compose.append_history(None,{'deck':'poster:'+title,'seed':seed,'artifact':'poster',
-                                  'primary':primary,'secondary':secondary,'chosen_by':why})
+                                  'primary':primary,'secondary':secondary,'chosen_by':why}, artifact='poster')
     return str(out)
 
 

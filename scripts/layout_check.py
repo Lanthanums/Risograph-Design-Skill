@@ -30,7 +30,6 @@ import layout as lay
 import textmetrics as tm
 import artifact_io as aio
 from place_decor import TEXT_TIERS, TEXT_PAD, tier_of, word_count
-from poster_layouts import TITLE_MIN_SHARE, TITLE_BODY_RATIO
 from canvas import DECK_CANVAS, presentation_canvas
 import rhythm
 
@@ -482,6 +481,7 @@ def poster_checks(slide,texts,images,decor,chrome,canvas,policy):
         bounds=canvas.bounds if role in policy.get('text_bleed',[]) else canvas.safe
         if not lay.inside(t['ink'],bounds,tol=1.5):
             fails.append(f'poster {role} text violates safe/trim bounds')
+    from poster_layouts import TITLE_MIN_SHARE, TITLE_BODY_RATIO
     title=[t for t in texts if t['shape'].name.startswith('poster[title]')]
     body=[t for t in texts if t['shape'].name.startswith(('poster[body]','poster[block]','poster[metadata]'))]
     if not title:
@@ -585,7 +585,7 @@ def main():
         args.secondary=args.secondary or d.get('secondary')
         archetypes=[p.get('archetype') for p in st.get('pages',[])]
         band=(st.get('density') or {}).get('band')
-        if not band and (st.get('density') or {}).get('level'):
+        if st.get('artifact', 'deck') == 'deck' and not band and (st.get('density') or {}).get('level'):
             import compose
             band=compose.DENSITY_LEVELS[st['density']['level']]['words']
 
