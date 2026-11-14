@@ -1,11 +1,14 @@
 """Measured takeaway rows with a common reading edge and a quiet gutter."""
 
 
-def use_cards(items, width, order, list_layout, paper_layout):
+def use_cards(items, width, order, list_layout, paper_layout, collage=False):
     if width < 680 or not 2 <= len(items) <= 4 or paper_layout == 'single':
         return False
     if paper_layout == 'staggered':
         return True
+    if collage:
+        # Torn cards suit points that each carry a cue and a detail.
+        return len(items) >= 3 and all(item.get('text') for item in items) and list_layout == 'auto'
     long_points = sum(len(item.get('text') or item['label']) >= 44 for item in items)
     return len(items) >= 3 and long_points >= 2 and order != 'ordered' and list_layout == 'auto'
 
@@ -92,3 +95,46 @@ def render_items(items, x, y, width, body, ink, mid, val, path, order, layout):
         # are omitted, so the row group is defined by type and proximity.
         y += min(17, body * .60) if j < len(items) - 1 else 8
     return y
+
+
+def render_collage_cards(plan, items, region, body, module, val, order, loosen=0):
+    """Scatter one torn card per point across two lanes, in reading order.
+
+    The lanes are uneven on purpose. Each card records a reading face. The
+    collage composer adds the field, slivers and tape around those faces.
+    """
+    left, top, width = region
+    lanes = ((.0, .535), (.565, .995), (.045, .50), (.525, .975))
+    next_y = [top, top + 24 + loosen * .5]
+    previous_top = top - 20
+    cards = []
+    for index, item in enumerate(items):
+        column = index % 2
+        a, b = lanes[index % 4]
+        x, right = left + width * a, left + width * b
+        y = max(next_y[column], previous_top + (20 if index else 0))
+        previous_top = y
+        start = len(plan['objects'])
+        row = f'visual_data.items.{index}'
+        text_x = x + (56 if order == 'ordered' else 21)
+        text_width = right - text_x - 22
+        cue_y = y + 14
+        if order == 'ordered':
+            val(f'nav-{index}', f'{index + 1:02d}', x + 17, cue_y + 4, 34, 14, True, 'navigation')
+        detail = item.get('text')
+        cue = val(row + '.label', item['label'], text_x, cue_y, text_width,
+                  min(26, body + 4) if detail else body + 1, True, tidy_rag=True)
+        if detail:
+            val(row + '.text', detail, text_x, cue['rect'][3] + 4, text_width, tidy_rag=True)
+        members = plan['objects'][start:]
+        bottom = max(ob['rect'][3] for ob in members) + 18
+        face = dict(id=f'{module}-card-{index + 1}', kind='paper', role='surface', layer='surface',
+                    material='collage-face', family='card', rect=[x, y, right, bottom],
+                    members=[ob['id'] for ob in members], rotation=0)
+        for ob in members:
+            ob['on_face'] = face['id']
+        plan['objects'].insert(start, face)
+        cards.append(dict(module=module, item=index + 1, face=face['id'], rect=face['rect'],
+                          members=face['members'], style='collage'))
+        next_y[column] = bottom + 12 + loosen
+    return max(card['rect'][3] for card in cards), cards

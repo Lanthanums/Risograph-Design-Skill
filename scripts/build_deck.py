@@ -695,7 +695,7 @@ def p_infographic(slide, spec, th, idx, total, meta):
     direction.setdefault('autofit',True)
     direction['type_plates'] = getattr(th, 'deck_title_plates', None)
     direction['_editorial'] = getattr(th, 'deck_editorial', False)
-    direction['_paper_mode'] = getattr(th, 'deck_paper_mode', 'off')
+    direction['_paper_mode'] = 'off' if direction.get('_collage') else getattr(th, 'deck_paper_mode', 'off')
     modules=__import__('copy').deepcopy(spec['modules'])
     title=spec['title']
     charts=[m for m in modules if m.get('visual') in ('bar-compare','bar-vertical','line-chart','ring','stacked-bar')]
@@ -719,8 +719,21 @@ def p_infographic(slide, spec, th, idx, total, meta):
         attempts.append(('off', 'single', body_size))
     if body_size > 18:
         attempts.append(('off', 'single', 18))
-    for index, (mode, layout, size) in enumerate(attempts):
-        direction.update(_paper_mode=mode, paper_layout=layout, body_size=size)
+    attempts = [dict(_paper_mode=mode, paper_layout=layout, body_size=size) for mode, layout, size in attempts]
+    if direction.get('_collage') in ('rich', 'quiet'):
+        # Paper needs room. Give it back in this order: body size, tighter
+        # insets, one sheet instead of cards, then a smaller title.
+        lists = any(m.get('visual') == 'takeaway-list' for m in modules)
+        layouts = [paper_layout] + (['single'] if lists and paper_layout != 'single' else [])
+        title = direction['title_size']
+        sizes = [body_size] + ([18] if body_size > 18 else [])
+        attempts = [dict(_paper_mode='off', paper_layout=layout, body_size=size, _tight=tight, title_size=scale)
+                    for scale in (title, round(title * .86), round(title * .74))
+                    for layout in layouts
+                    for size, tight in [(s, False) for s in sizes] + [(18, True)]]
+    for index, attempt in enumerate(attempts):
+        direction.update(attempt)
+        mode, layout, size = attempt['_paper_mode'], attempt['paper_layout'], attempt['body_size']
         first_shape = len(slide.shapes)
         palette = dict(th.t)
         try:
@@ -923,6 +936,7 @@ def build(spec, out_path, base_dir=None):
     feature = featured_quote(pages, reversed_pages)
     rendered_quotes = []
     cutaway_pages = []
+    collage_pages = []
     refinement_colors = set()
     refinement_fallbacks = []
     from deck_print import chrome_foreground
@@ -990,6 +1004,7 @@ def build(spec, out_path, base_dir=None):
                                   **mt.ink_stats(washed))
         picture = slide.shapes.add_picture(background, Pt(0), Pt(0), prs.slide_width, prs.slide_height)
         slide.shapes._spTree.insert(2, picture._element)
+        page_plate = picture
         set_notes(slide, page.get("notes", meta.get("notes_default", "")))
         if want_elements:
             candidates = page.get('element_pool', meta.get('element_pool'))
@@ -1063,9 +1078,21 @@ def build(spec, out_path, base_dir=None):
                 draw_impression(slide, mark, th, number)
                 impression_records.append(dict(mark, page=i))
         if th.lang == 'en' and (th.deck_editorial or page.get('editorial')):
+            from deck_refinements import collage_mode
+            mode = collage_mode(meta, page, pool, want_elements and th.deck_editorial)
             result = revise(slide, page, th, i, total, meta, original_content, feature,
                             rendered_quotes[-1]['layout'] if rendered_quotes else None,
-                            (writer, p_editorial_quote), media)
+                            (writer, p_editorial_quote), media,
+                            collage=dict(mode=mode, seed=meta.get('seed', 1) * 131 + i,
+                                         variant=meta.get('seed', 1) + len(collage_pages)) if mode else None)
+            if result.get('collage'):
+                from deck_plate import bake
+                bake(slide, page_plate, original, result['collage'], th, meta.get('seed', 1), i, media,
+                     [r['rect'] for r in tm.audit(slide)] if treatment != 'paper' else (),
+                     manifest, on_red, (PAGE_W, PAGE_H))
+                collage_pages.append(i)
+                collage_records.extend(dict(piece, page=i, purpose='collage')
+                                       for piece in result['collage']['pieces'])
             refinement_colors.update(result.get('colors', ()))
             if result.get('fallback'):
                 refinement_fallbacks.append(dict(page=i, reasons=result['fallback']))
@@ -1074,12 +1101,13 @@ def build(spec, out_path, base_dir=None):
             if result.get('plan'):
                 new_plan = result['plan']
                 evidence_pages[-1]['plan'] = new_plan
-                collage_records = [record for record in collage_records if record['page'] != i]
+                collage_records = [record for record in collage_records
+                                   if record['page'] != i or record.get('purpose') == 'collage']
                 collage_records.extend(dict(panel, page=i, purpose='list-container')
                                        for metric in new_plan['module_metrics']
                                        for panel in metric.get('paper_panels', []))
             cutaway_mode = direction.get('case_collage', 'auto')
-            if (want_elements and pool != [] and (cutaway_mode == 'on' or
+            if (not result.get('collage') and want_elements and pool != [] and (cutaway_mode == 'on' or
                     (len(cutaway_pages) < 2 and (not cutaway_pages or cutaway_pages[-1] < i-1)))):
                 cutaway = sparse_cutaway(slide, page, th, meta.get('seed', 1)*131+i)
                 if cutaway:

@@ -551,12 +551,13 @@ def pixel_checks(rep, deck, media, render, args):
     # clean page gets flagged for a dot field it never had. Floods are exempted
     # and reported as such.
     reversed_pages = set()
+    collage_pages = set()
     if media:
         mf0 = os.path.join(media, "manifest.json")
         if os.path.exists(mf0):
-            reversed_pages = {p["page"] for p in
-                              json.load(open(mf0, encoding="utf-8"))["pages"]
-                              if p.get("reversed")}
+            rows0 = json.load(open(mf0, encoding="utf-8"))["pages"]
+            reversed_pages = {p["page"] for p in rows0 if p.get("reversed")}
+            collage_pages = {p["page"] for p in rows0 if p.get("collage")}
     for i, f in enumerate(files, 1):
         style=getattr(args,'style',{})
         plan=style.get('poster',{}).get('art_direction') if canvas.artifact=='poster' else next((r['plan'] for r in style.get('evidence_pages',[]) if r['page']==i),None)
@@ -611,6 +612,7 @@ def pixel_checks(rep, deck, media, render, args):
         elif bg is not None:
             bg_mask = mt.ink_mask(bg, threshold=25)
             bg_frac = float(bg_mask.mean())
+            collage_page = i in collage_pages
             worst, worst_txt, worst_sev = 0.0, "", "fail"
             for ts in text_shapes(prs.slides[i - 1]):
                 if ts["chars"] < BODY_CHARS or is_annotation(ts["text"]):
@@ -627,6 +629,17 @@ def pixel_checks(rep, deck, media, render, args):
                 cell = bg_mask[cy0:cy1, cx0:cx1]
                 if cell.size == 0:
                     continue
+                if collage_page:
+                    # Copy on a collage page sits on a paper face. Compare the
+                    # plate with that face, so a clean sheet reads as clean
+                    # and a dot screen under copy still fails.
+                    # A faint ruling is not a dot field, and turned copy keeps
+                    # a few points of tolerance at the edge of its box.
+                    trim = int(3 * px)
+                    if cx1 - cx0 <= 4 * trim or cy1 - cy0 <= 3 * trim:
+                        continue
+                    cell = mt.ink_mask(bg.crop((cx0 + trim, cy0 + trim, cx1 - trim, cy1 - trim)),
+                                       threshold=64)
                 frac_cell = float(cell.mean())
                 if frac_cell > worst:
                     worst = frac_cell

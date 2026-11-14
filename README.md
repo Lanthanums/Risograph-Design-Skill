@@ -1,7 +1,7 @@
-# Riso Slides v4.5
+# Riso Slides v5.0
 
 Create editable English Risograph presentations and standalone posters from supplied
-content. Runtime version **4.5**. Start with [SKILL.md](SKILL.md).
+content. Runtime version **5.0**. Start with [SKILL.md](SKILL.md).
 [中文说明](README_zh.md).
 
 Use Python 3.10+ and install requirements.txt. Final previews need LibreOffice
@@ -25,6 +25,13 @@ Use --draft while planning. Both runners default to system LibreOffice; choose
 --autodiscover or an explicit kit when needed. Verified input and render caches
 avoid repeated work; --mode audit rebuilds, converts and checks afresh. See
 [performance and cache](references/performance.md) for boundaries and benchmarks.
+
+Deck content pages are set on torn-paper collage: reading sheets, newsprint
+chart clippings, halftone fields, tape and small paper scenes, drawn by a
+seeded paper engine and printed into each slide background. The cover,
+section dividers and the classic quotation keep their v4.5 design, and
+`collage: off` returns a page or a deck to v4.5. See
+[deck paper collage](references/deck-paper-collage.md).
 
 Native text, diagrams, charts and anchored glyphs remain editable. Inspect full
 PNG, thumbnail and blur before assigning scores. Automated QA does not establish

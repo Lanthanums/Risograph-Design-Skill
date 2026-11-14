@@ -1,6 +1,6 @@
-# Riso Slides v4.5
+# Riso Slides v5.0
 
-从原稿生成可编辑的英文 Risograph 演示文稿与独立海报。运行时版本 **4.5**。
+从原稿生成可编辑的英文 Risograph 演示文稿与独立海报。运行时版本 **5.0**。
 入口为 [SKILL.md](SKILL.md)，另有 [English README](README.md)。
 
 需要 Python 3.10+，安装 requirements.txt。最终预览需要 LibreOffice 与可用的
@@ -20,6 +20,10 @@ python scripts/deck_run.py --plan deck-content-plan.json --require-storyboard --
 规划阶段使用 --draft。两条管线默认系统 LibreOffice，也可指定 --autodiscover 或 kit。
 输入缓存与共享渲染缓存均校验完整性；--mode audit 重新构建、实际转换并运行 QA。
 测量方法和边界见[性能与缓存](references/performance.md)。
+
+演示文稿的内容页默认采用撕纸拼贴：阅读纸、新闻纸图表剪报、半调色纸、胶带和小型纸景，
+由带种子的纸张引擎生成并印入每页背景图。封面、章节页和经典引语页保持 v4.5 的设计，
+`collage: off` 可让单页或整套回到 v4.5。参阅[撕纸拼贴](references/deck-paper-collage.md)。
 
 文字、图表、信息图和锚定元素保持原生可编辑。查看完整图、缩略图和模糊图后再评分。
 自动 QA 不代表美观验收或 Microsoft PowerPoint 实机效果。短稿的 A3 留白、部分方言

@@ -13,14 +13,15 @@ qualifications. Set `meta.lang: en`.
 
 Read [storyboard](deck-storyboard.md) and [deck composition](deck-composition.md).
 Use [English typography and dense copy](deck-typography-and-lists.md) to plan
-title breaks, list density and any information-bearing paper panel before rendering.
+title breaks, list density and which points sit on torn cards before rendering.
 Write one complete storyboard in the deck content plan before building any slides,
 including a short deck-wide rationale and a page row for each intended slide.
 For every page, decide what the viewer sees first, what evidence stays visible,
 how the eye moves, what the print treatment does, and how the next slide follows.
 Nominate the single most important standalone quotation for the classic treatment
 when appropriate. For charts, plan the data columns and source line together.
-For sparse cases, decide whether a localized paper cutaway adds a meaningful visual.
+Content pages are set on torn paper. Read [deck paper collage](deck-paper-collage.md)
+and decide which pages are rich, which are `collage: quiet`, and which stay open.
 Use purpose, source content and constraints to choose the composition. Review a
 few consecutive slides on paper before committing to the full sequence. Save
 the complete storyboard and share its path and sequence before building when

@@ -1,4 +1,9 @@
-"""Deck-only paper panels, with native contours and a quiet reading face."""
+"""Native paper panels of the v4.5 compatibility pass.
+
+The builder draws every page this way first, to keep the cover, dividers and
+classic quotation stable, and uses it for pages with ``collage: off``. Collage
+pages are then redrawn by ``deck_collage`` and ``paper_stock``.
+"""
 from hashlib import sha256
 import math
 import random

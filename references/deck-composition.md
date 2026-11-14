@@ -57,10 +57,12 @@ standalone quotation in the deck. Decide which quotation carries the argument
 and set `quote_priority: featured` on that page. Use `supporting` for a page that
 should never receive the automatic classic treatment. An explicit `classic`
 request is a nomination for the same single slot. Leave the slot unused when
-the source or rhythm calls for a quieter treatment. Other quotes use a
-centered `broadside` (best for short excerpts), a `margin` with separate credit,
-or a `folio` with a paper face. Keep a visible opening quotation mark in every
-layout, including an inline pull quote, and keep source words and credits exact.
+the source or rhythm calls for a quieter treatment. Every other quotation is
+set on a torn sheet with a large opening quotation mark hanging across its top
+edge and the credit on a small taped slip. `broadside` centres a short
+excerpt, `margin` sets the sheet to the right, and `folio` gives a long
+excerpt a wide sheet. Keep a visible opening quotation mark in every layout,
+including an inline pull quote, and keep source words and credits exact.
 The fitter can choose another layout when the copy or credit needs more room.
 `vertical_align` accepts top, balanced (default), center or bottom within measured
 remaining space. `title_rule: false` removes the title underline. Body/title sizes
@@ -87,11 +89,24 @@ Use two columns only if the smallest labels still fit. If a slide has only two
 numbers, make their comparison clear and leave a calm field. Do not manufacture
 additional statistics, categories, or interpretations to fill the page.
 
-On sparse case pages, use a small anchored cutaway when it supports the story
-and there is a measured opening. `case_collage: off` keeps a deliberate pause,
-and `on` requests the treatment if it fits. `case_collage_glyph` accepts a native
-glyph from the catalogue when the author can tie it to the source. See
-[paper construction and prompts](deck-paper-collage.md).
+A chart page is set as a newspaper clipping. The chart sits on a newsprint
+sheet under a double column rule, with thick bars, bold values and a second
+plate slightly out of register. A trend line carries a fading dot screen
+beneath it. The source data, labels and units are the same as on an open page.
+A single chart takes about two thirds of the width and more of the newspaper
+shows beside it. Give a long headline one line where you can, because the
+clipping needs the height.
+
+## Collage on content pages
+
+Content pages are set on torn paper by default: a dominant field, reading
+faces under the copy, and a small paper scene in a large opening. Read
+[deck paper collage](deck-paper-collage.md) for the page families and the
+review list. Set `collage: quiet` on a dense page or a deliberate pause, and
+`collage: off` for the open v4.5 page. `meta.collage` sets the deck default.
+A sparse statement or case page keeps its copy to a reading measure and lets
+the paper scene carry the rest of the page. Plan which pages are rich and
+which are quiet in the storyboard, so the deck has a rhythm.
 
 Use explicit module `page` assignments to compose arguments. Parallel members of
 one semantic group may share a row; `keep_together: true` preserves a column lock.
@@ -149,9 +164,11 @@ emphasis slides rather than filling every page mechanically.
 ## Print treatments
 
 Treat the v4.5 shared print system as the compatibility baseline. When tuning a
-page family, keep the existing cover, section divider, paper backgrounds,
-overprint pairings, dot fields and deck-wide mark density. Limit new geometry
-to the requested page families. For maintenance, render the same English
+page family, keep the existing cover, section divider, classic quotation, paper
+backgrounds, overprint pairings, dot fields and deck-wide mark density. Limit
+new geometry to the requested page families. The builder draws each page as
+v4.5 first and then redraws the content of collage pages, which keeps the
+locked pages identical from release to release. For maintenance, render the same English
 source with both versions and the same renderer and DPI. Compare protected
 pages pixel by pixel and check the background plates by hash.
 

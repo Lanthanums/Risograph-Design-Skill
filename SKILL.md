@@ -1,6 +1,6 @@
 ---
 name: riso-slides
-description: Create editable English Risograph PowerPoint decks and standalone posters, with editorial typography, spot inks, print texture, diagrams and charts. Defaults to PowerPoint. Use the poster workflow when the requested deliverable is a standalone poster.
+description: Create editable English Risograph PowerPoint decks and standalone posters, with editorial typography, spot inks, torn-paper collage, print texture, diagrams and charts. Defaults to PowerPoint. Use the poster workflow when the requested deliverable is a standalone poster.
 ---
 
 # Riso Slides

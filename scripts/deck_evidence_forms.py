@@ -25,11 +25,19 @@ def render_module(index,m,rect,context,band=1,col=0):
     order = context.get('list_order', 'unordered')
     list_layout = context.get('list_layout', 'auto')
     from deck_list_layout import use_cards
-    staggered = paper_panel and use_cards(d.get('items', []), rw, order, list_layout,
-                                           context.get('paper_layout', 'auto'))
+    # A collage page prints every module on a reading face. The legacy
+    # native panel stays available to the v4.5 compatibility pass.
+    collage = context.get('collage') in ('rich', 'quiet') and visual not in ('stamp', 'ticket')
+    if collage:
+        paper_panel = False
+    staggered = (paper_panel or collage) and visual == 'takeaway-list' and use_cards(
+        d.get('items', []), rw, order, list_layout, context.get('paper_layout', 'auto'), collage)
     papers = []
     if paper_panel and not staggered:
         tx, tw, yy = rx + 22, rw - 48, ry + 18
+    tight = collage and context.get('tight')
+    if collage and not staggered:
+        tx, tw, yy = rx + 22, rw - 44, ry + (14 if tight else 19)
     headline=m.get('headline','') if m.get('render_heading',True) else ''
     unit=d.get('unit','') if visual in ('bar-compare','bar-vertical','line-chart') and m.get('render_unit_heading',True) else ''
     if unit and unit.lower() not in headline.lower():headline=(headline+' ('+unit+')') if headline else unit
@@ -48,7 +56,7 @@ def render_module(index,m,rect,context,band=1,col=0):
         if d.get('unit') and d['unit'] not in label:label+=' ('+d['unit']+')'
         if not str(value) or not label:raise ValueError(mid+': statistic requires value + label')
         wide=tw>500;label_width=tw*.46 if wide else tw
-        number=val('visual_data.value',value,tx,yy,label_width,body*4,True,'hero_stat')
+        number=val('visual_data.value',value,tx,yy,label_width,body*(5.4 if collage and not tight else 4),True,'hero_stat')
         number['stat_tile']=True
         labelob=val('visual_data.label',label,tx,number['rect'][3]+3,label_width,body)
         yy=labelob['rect'][3]+12
@@ -71,7 +79,7 @@ def render_module(index,m,rect,context,band=1,col=0):
                 paths=[outer+inner]
                 objs.append(dict(id=mid+'-proportion-'+str(j),kind='path',rect=bounds(paths),paths=paths,closed=True,fill=ink['main'][j],role='data',rotation=0,anchor=number['id']))
             yy=max(yy,sy+radius+12)
-        else:
+        elif not collage:
             size=28;gx=tx+tw-size;gy=number['rect'][1]+8
             if number['fit']['width']+size+12<tw:
                 objs.append(glyph(d.get('icon','document'),[gx,gy,gx+size,gy+size],ink['main'][1],mid+'-glyph',number['id']))
@@ -89,8 +97,10 @@ def render_module(index,m,rect,context,band=1,col=0):
         items=d.get('items',[]);peak=max((float(t['value']) for t in items),default=0)
         if peak<=0 or any(float(t['value'])<0 for t in items):raise ValueError(mid+': bars require nonnegative values and positive maximum')
         if press_chart and tw >= 430:
-            from deck_press_chart import bar_rows
-            yy = bar_rows(mid, items, tx, yy, tw, body, peak, d.get('unit'), ink, val, box, path)
+            from deck_press_chart import bar_rows, news_bars
+            yy = (news_bars if collage else bar_rows)(
+                mid, items, tx, yy, tw, body, peak, d.get('unit'), ink, val, box, path,
+                **(dict(tight=tight) if collage else {}))
         for j,item in enumerate(items if not (press_chart and tw >= 430) else []):
             label=val(f'visual_data.items.{j}.label',item['label'],tx,yy,tw,body);yy=label['rect'][3]+6
             length=(tw-78)*float(item['value'])/peak
@@ -227,9 +237,12 @@ def render_module(index,m,rect,context,band=1,col=0):
         if len(items)!=2:raise ValueError(mid+': comparison requires exactly two items')
         divider_top = yy
         printed = context.get('english', False)
+        pair_base = yy
         for j, item in enumerate(items):
             xx = tx + j * (tw / 2 + 8)
             width = tw / 2 - 20
+            # The second sheet of a comparison sits a little lower.
+            yy = pair_base + (15 * j if collage else 0)
             if printed:
                 rule_y = yy + 2
                 mark = path(mid + '-column-ink-' + str(j),
@@ -242,8 +255,12 @@ def render_module(index,m,rect,context,band=1,col=0):
             val(f'visual_data.items.{j}.text', item.get('text', ''),
                 xx, label['rect'][3] + 10, width, max(body, 22) if printed else body)
         yy = max(o['rect'][3] for o in objs[start:]) + (16 if printed else 10)
-        path(mid+'-divider', [[[tx+tw/2,divider_top],[tx+tw/2,yy-10 if printed else yy]]],
-             anchor=mid+'-heading')
+        if collage:
+            pair_top, pair_bottom = divider_top, yy - 16
+            pair_drop = 15
+        else:
+            path(mid+'-divider', [[[tx+tw/2,divider_top],[tx+tw/2,yy-10 if printed else yy]]],
+                 anchor=mid+'-heading')
     elif visual in ('icon-bullet','pull-quote','stamp'):
         size=34
         if visual=='icon-bullet':objs.append(glyph(d.get('icon','document'),[tx,yy,tx+size,yy+size],ink['main'][1],mid+'-glyph',mid+'-heading'))
@@ -252,7 +269,12 @@ def render_module(index,m,rect,context,band=1,col=0):
                 label=val(f'visual_data.items.{j}.label',item['label'],tx+45,yy,tw-45,body,True);yy=label['rect'][3]+8
                 if item.get('text'):yy=val(f'visual_data.items.{j}.text',item['text'],tx+45,yy,tw-45,body)['rect'][3]+10
     elif visual == 'takeaway-list' and d.get('items') and context.get('editorial_lists'):
-        if staggered:
+        if staggered and collage:
+            from deck_list_layout import render_collage_cards
+            yy, papers = render_collage_cards(p, d['items'], (rx, yy, rw), body, mid, val, order,
+                                              context.get('loosen', 0))
+            yy += 6
+        elif staggered:
             from deck_list_layout import render_cards
             yy, papers = render_cards(p, d['items'], (rx, yy, rw), body, mid, val, order,
                                      context.get('cut_paper', False))
@@ -307,16 +329,58 @@ def render_module(index,m,rect,context,band=1,col=0):
         from deck_paper_collage import add_panel
         papers = [add_panel(p, start, mid, [rx, ry, x1, bottom], members)]
         bottom = max(ob['rect'][3] for ob in objs[start:])
+    if collage and not staggered and visual in ('before-after', 'versus', 'contrast-pair') and d.get('items'):
+        # Each side of a comparison sits on its own sheet.
+        sides = ([], [])
+        for ob in members:
+            if 'visual_data.items.' in ob['id'] or '-column-ink-' in ob['id']:
+                sides[ob['rect'][0] >= tx + tw / 2].append(ob)
+        papers = []
+        for j, side in enumerate(sides):
+            left = tx + j * (tw / 2 + 8)
+            face = dict(id=f'{mid}-side-{j + 1}', kind='paper', role='surface', layer='surface',
+                        material='collage-face', family='card',
+                        rect=[left - 19, pair_top - 15 + j * pair_drop, left + tw / 2 - 20 + 17,
+                              max(ob['rect'][3] for ob in side) + 18],
+                        members=[ob['id'] for ob in side], rotation=0)
+            for ob in side:
+                ob['on_face'] = face['id']
+            objs.insert(start, face)
+            papers.append(dict(module=mid, face=face['id'], rect=face['rect'], members=face['members'],
+                               style='collage'))
+        bottom = max(bottom, pair_bottom + 22)
+    elif collage and not staggered and members:
+        # The face hugs the measured copy, so a short module gets a small sheet.
+        reach = max((ob['rect'][0] + ob['fit']['width'] if ob['kind'] == 'text' else ob['rect'][2])
+                    for ob in members)
+        family = ('chart' if press_chart else context.get('collage_family') or
+                  ('stat' if visual in ('big-number', 'stat-tile', 'stat-row') else 'sheet'))
+        wide = family == 'chart' or visual in ('step-flow', 'timeline', 'before-after', 'versus', 'contrast-pair')
+        right = x1 - 2 if wide else min(x1 - 2, max(reach + 26, rx + min(rw - 2, 250)))
+        face = dict(id=mid + '-face', kind='paper', role='surface', layer='surface', material='collage-face',
+                    family=family, rect=[rx + 2, ry + 2, right, bottom + (13 if tight else 19)],
+                    members=[ob['id'] for ob in members], rotation=0)
+        for ob in members:
+            ob['on_face'] = face['id']
+            if ob['kind'] == 'text' and ob.get('alignment', 'l') == 'l':
+                # Keep each left-aligned frame on its sheet, not just its glyphs.
+                ob['rect'][2] = max(ob['rect'][0] + ob['fit']['width'] + 4, min(ob['rect'][2], right - 18))
+        objs.insert(start, face)
+        papers = [dict(module=mid, face=face['id'], rect=face['rect'], members=face['members'], style='collage')]
+        bottom = face['rect'][3]
     if bottom>ry+rh+1:raise ValueError(f'{mid}: needs {bottom-ry:.1f}pt; allocated {rh:.1f}pt. Increase module weight or choose fewer columns; preserve copy.')
     node(mid,members,[rx,ry,rx+rw,ry+rh],band,col)
     from source_profile import TEXT_FORMS
     p['module_metrics'].append(dict(id=mid,level=m.get('level'),visual=visual,rect=[rx,ry,rx+rw,ry+rh],
                                     text_only=visual in TEXT_FORMS,weight=m.get('weight',1),group=m.get('group')))
     if papers:
-        p['module_metrics'][-1]['paper_panels'] = papers
-    elif press_chart:
+        p['module_metrics'][-1]['collage_faces' if collage else 'paper_panels'] = papers
+    if press_chart and (collage or not papers):
         from deck_press_chart import finish
-        finish(p,start,mid,[rx,ry,rx+rw,ry+rh])
+        finish(p, start, mid, [tx-10, ry+10, tx+tw+10, ry+rh] if collage else [rx,ry,rx+rw,ry+rh],
+               on_face=mid + '-face' if collage else None)
+    elif papers:
+        pass
     else:
         from deck_material import apply as apply_style
         apply_style(p,start,m,[rx,ry,rx+rw,ry+rh],bottom)

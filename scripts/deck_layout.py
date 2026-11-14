@@ -109,6 +109,7 @@ def make_plan(spec,_vertical_pass=False):
     focal = meta.get('lang') == 'en' and len(modules) == 1 and modules[0].get('visual') in (
         'key-statement', 'pull-quote', 'text', 'icon-bullet')
     cy=title['rect'][3]+25
+    cy0=cy
     # Safe full-line rule outside the glyph envelope, never across uppercase letters.
     if a.get('title_rule', True):
         objs.append(title_rule(title, cy-8, ink['accent']))
@@ -135,23 +136,35 @@ def make_plan(spec,_vertical_pass=False):
     if press_spread:
         rows = [mains]
     footer_height=sum(tf.fit(text(m),theme.f_body,16,w-20,H,minimum=16,ls=1.08).height+12 for _,m in foot)+16 if foot else 0
+    if width_fraction is None and a.get('_collage') in ('rich', 'quiet') and len(mains) == 1:
+        # One module shares the page with a paper scene: copy keeps a reading
+        # measure and a chart the width of a newspaper graphic.
+        lone = mains[0][1]['visual']
+        if lone in ('text', 'key-statement', 'summary-box', 'definition-card', 'icon-bullet',
+                    'big-number', 'stat-tile'):
+            width_fraction = .6
+        elif lone in ('bar-compare', 'bar-vertical', 'line-chart', 'stacked-bar', 'ring'):
+            width_fraction = .68
     available=y1-cy-footer_height-gap
     list_candidates = [m for _, m in mains if m['visual'] == 'takeaway-list'
                        and len(m.get('visual_data', {}).get('items', [])) >= 2]
     paper_mode = a.get('_paper_mode', 'off')
     paper_module = (max(list_candidates, key=lambda m: len(m['visual_data']['items']))['id']
                     if paper_mode != 'off' and list_candidates else None)
+    loosen = 0
     # Measured row minima, content-driven area allocation; never shrink body.
     def render_module(index,m,rx,ry,rw,rh,band,col):
         from deck_evidence_forms import render_module as render_evidence
         return render_evidence(index,m,[rx,ry,rx+rw,ry+rh],
-            dict(plan=p,put=put,rect=rect,path=path,node=node,theme=theme,heading_size=a.get('heading_size',25 if evidence.get('legacy') else max(26,body*1.3)),bar_thickness=18 if evidence.get('legacy') else max(24,min(48,body*(1+policy['level']))),chart_height=min(180,available*.38),focal=focal,english=meta.get('lang') == 'en',
+            dict(plan=p,put=put,rect=rect,path=path,node=node,theme=theme,heading_size=a.get('heading_size',25 if evidence.get('legacy') else max(26,body*1.3)),bar_thickness=18 if evidence.get('legacy') else max(24,min(48,body*(1+policy['level']))),chart_height=(min(150,available*.4) if a.get('_tight') else min(210,available*.5)) if a.get('_collage') in ('rich','quiet') else min(180,available*.38),focal=focal,english=meta.get('lang') == 'en',
                  editorial_lists=a.get('_editorial', False), list_order=a.get('list_order', 'unordered'),
                  list_layout=a.get('list_layout', 'auto'),
                  paper_layout=a.get('paper_layout', 'auto'),
                  cut_paper=a.get('_cut_paper', False), press_chart=a.get('_press_chart', False),
                  press_side_legend=not a.get('_press_bands', False),
                  inline_quote=a.get('_inline_quote', False),
+                 collage=a.get('_collage'), tight=a.get('_tight', False), loosen=loosen,
+                 collage_family='note' if press_spread and col == 1 else None,
                  paper_panel=m['id'] == paper_module and rw >= (310 if paper_mode == 'on' else 495)),band,col)
     # Measure each row using the exact component writer, then discard the probe.
     # Extra page height stays in the exterior margin instead of giant interior holes.
@@ -214,6 +227,16 @@ def make_plan(spec,_vertical_pass=False):
         extra=min(16,max(0,(available-needed)/max(1,len(rows)-1))) if len(rows)>1 else 0
         gap+=extra
         if extra:p['autofit']['changes'].append(f'Increased inter-row spacing by {extra:.1f}pt (bounded)')
+    if (a.get('_collage') in ('rich', 'quiet') and len(mains) == 1 and mains[0][1]['visual'] == 'takeaway-list'
+            and available - needed > 24 and not a.get('_compact')):
+        # Scattered cards take some of the spare height as air between rows.
+        loosen = min(20, (available - needed) * .22)
+        count = len(mains[0][1].get('visual_data', {}).get('items', []))
+        grow = loosen * (1.5 if count > 2 else .5)
+        rowheight = [value + grow for value in rowheight]
+        rowpacks = [(stacks, [value + grow for value in heights], starts, widths)
+                    for stacks, heights, starts, widths in rowpacks]
+        needed += grow
     alignment = a.get('vertical_align', 'balanced')
     if alignment not in ('top', 'balanced', 'center', 'bottom'):
         raise ValueError('vertical_align must be top, balanced, center or bottom')
@@ -223,6 +246,9 @@ def make_plan(spec,_vertical_pass=False):
     elif alignment == 'bottom':cy += slack
     elif alignment == 'balanced' and len(mains) > 1 and len(rows) == 1:
         cy += min(64, slack * .25)
+    elif alignment == 'balanced' and a.get('_collage') in ('rich', 'quiet'):
+        # Papers sit a little below the rule instead of hanging from it.
+        cy += min(22, slack * .2) if a.get('_compact') else min(58, slack * .4)
     for row_index,(row,rh,packed) in enumerate(zip(rows,rowheight,rowpacks)):
         stacks,heights,starts,widths=packed
         for col,stack in enumerate(stacks):
@@ -240,6 +266,13 @@ def make_plan(spec,_vertical_pass=False):
         path(m['id']+'-ticket',[[[x,foot_y],[x,ob['rect'][3]+4],[x1,ob['rect'][3]+4]]],role='structure',anchor=m['id'])
         node(m['id'],[ob],[x,foot_y,x1,ob['rect'][3]+8],len(rows)+2)
         foot_y=ob['rect'][3]+12
+    if a.get('_collage'):
+        # Papers are arranged last, around the measured copy.
+        from deck_collage import compose
+        loose = [o['rect'] for o in objs if o['kind'] != 'paper' and not o.get('on_face')
+                 and o['id'] not in ('title', 'title-rule')]
+        compose(p, a, [title['rect'][0], title['rect'][1],
+                       title['rect'][0] + title['fit']['width'], cy0 - 4], loose)
     p['reading_graph']=dict(node_ids=[n['region'] for n in p['reading_order']],edges=[[u['region'],v['region']] for u,v in zip(p['reading_order'],p['reading_order'][1:])])
     known={o['id'] for o in objs}
     for o in objs:

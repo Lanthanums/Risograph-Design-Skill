@@ -2,9 +2,46 @@
 import typefit as tf
 import riso_kit as rk
 
+def _turn(shape, obj):
+    """Rotate a native shape about the centre of the paper it sits on."""
+    angle = obj.get('rotation', 0)
+    pivot = obj.get('pivot')
+    if not angle:
+        return
+    if pivot:
+        import math
+        from pptx.util import Pt
+        cx, cy = shape.left.pt + shape.width.pt / 2, shape.top.pt + shape.height.pt / 2
+        c, s = math.cos(math.radians(angle)), math.sin(math.radians(angle))
+        nx = pivot[0] + (cx - pivot[0]) * c - (cy - pivot[1]) * s
+        ny = pivot[1] + (cx - pivot[0]) * s + (cy - pivot[1]) * c
+        shape.left, shape.top = Pt(nx - shape.width.pt / 2), Pt(ny - shape.height.pt / 2)
+    shape.rotation = angle
+
+
+def face_color(theme, stock):
+    import paper_stock as ps
+    tokens = dict(paper=theme.paper, ink=theme.ink)
+    return ps.to_hex(ps.stock_colors(tokens).get(stock, ps.stock_colors(tokens)['bone']))
+
+
 def apply_colors(plan, theme):
     from deck_paper_collage import panel_color
     ink = plan['ink_plan']
+    # Copy on a reading face is printed in the page inks, on any page field.
+    printed = {ink['main'][0]: theme.inkA, ink['main'][1]: theme.inkB, ink['body']: theme.text,
+               ink['accent']: theme.accent1}
+    for obj in plan['objects']:
+        if not obj.get('on_face') or obj['kind'] == 'paper':
+            continue
+        stock = face_color(theme, obj.get('face_stock', 'bone'))
+        for key in ('color', 'fill', 'line'):
+            if obj.get(key) in printed:
+                obj[key] = printed[obj[key]]
+            elif obj.get(key) == ink['paper']:
+                obj[key] = stock
+        if 'background' in obj:
+            obj['background'] = stock
     mapping = {ink['main'][0]: theme.display_ink, ink['main'][1]: theme.inkB,
                ink['body']: theme.display_ink if theme.on_red else theme.text,
                ink['accent']: theme.accent1, ink['paper']: theme.inkA if theme.on_red else theme.paper}
@@ -28,6 +65,8 @@ def draw(slide,p,theme):
     from pptx.enum.shapes import MSO_SHAPE
     for o in p['objects']:
         x,y,x1,y1=o['rect'];w=x1-x;h=y1-y
+        if o['kind']=='paper':
+            continue  # printed on the page plate
         if o['kind']=='path':
             from native_vectors import native_path
             shape = native_path(slide,o)
@@ -57,7 +96,7 @@ def draw(slide,p,theme):
                         paragraph.line_spacing=Pt(f.pitch)
             for i,s in enumerate(shapes):
                 s.name=f"art[{o['id']}]/{i}"
-                s.rotation=o.get('rotation',0)
+                _turn(s, o)
         elif o['kind']=='halftone':
             for i,(cx,cy,r) in enumerate(o['dots']):
                 sh=rk.oval(slide,cx,cy,r*2,r*2,fill=o['fill']);sh.name=f"art[{o['id']}]/{i}"
@@ -65,4 +104,4 @@ def draw(slide,p,theme):
             kind=MSO_SHAPE.CHEVRON if o['kind']=='arrow' else MSO_SHAPE.ROUNDED_RECTANGLE if o.get('slot')=='badge' else MSO_SHAPE.RECTANGLE
             sh=rk.shape(slide,kind,x,y,w,h,fill=o.get('fill'),line=o.get('line'),lw=2 if o.get('slot')=='stamp' else .75)
             sh.name=f"art[{o['id']}]"
-            sh.rotation=o.get('rotation',0)
+            _turn(sh, o)

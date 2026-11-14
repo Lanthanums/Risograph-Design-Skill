@@ -409,6 +409,7 @@ def deck_outline(plan):
             ('quote_layout', ('auto', 'margin', 'broadside', 'folio', 'classic')),
             ('quote_priority', ('auto', 'featured', 'supporting')),
             ('case_collage', ('auto', 'on', 'off')),
+            ('collage', ('auto', 'rich', 'quiet', 'off')),
         ):
             if key in page['art_direction'] and page['art_direction'][key] not in allowed:
                 raise ValueError(f"{page_id}: {key} must be one of {', '.join(allowed)}")

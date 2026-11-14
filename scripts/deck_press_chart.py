@@ -5,6 +5,46 @@ from native_vectors import bounds
 PRESS_FORMS = frozenset(('bar-compare', 'bar-vertical', 'line-chart', 'ring', 'stacked-bar'))
 
 
+def news_bars(mid, items, tx, yy, tw, body, peak, unit, ink, val, box, path, tight=False):
+    """Bars set like a news graphic: thick, on hairlines, with bold values."""
+    labels = tw * .33
+    thick = body * (1.5 if len(items) <= 4 else 1.15 if len(items) <= 6 else .85)
+    lead, trail = (5, 6) if tight else (9, 10)
+    if tight:
+        thick = min(thick, body * 1.05)
+    value_width = max(78, min(116, tw * .18))
+    start = tx + labels + 12
+    value_x = tx + tw - value_width
+    scale = (value_x - start - 18) / peak
+    top = yy
+    axis = path(mid+'-zero-axis', [[[start, top+3], [start, top+4]]], ink['main'][0], role='structure')
+    for j, item in enumerate(items):
+        prefix = f'visual_data.items.{j}'
+        row = yy + lead
+        label = val(prefix+'.label', item['label'], tx, row, labels, body, tidy_rag=True)
+        value = val(prefix+'.value', item['value'], value_x, row, value_width, body * 1.3, True)
+        for ob in (label, value):
+            # Centre one-line copy on the bar; taller labels grow the row.
+            shift = (thick - (ob['rect'][3] - ob['rect'][1])) / 2
+            if shift > 0:
+                ob['rect'][1] += shift
+                ob['rect'][3] += shift
+        size = float(item['value']) * scale
+        if size > 0:
+            bar = box(mid+f'-bar-{j}', [start, row, start+size, row+thick],
+                      ink['main'][j % 2], anchor=label['id'])
+            bar['data_point'] = dict(atom=item.get('atom'), value=item['value'], unit=unit,
+                                     zero_origin=start, scale=scale, axis='x')
+        yy = max(label['rect'][3], value['rect'][3], row+thick) + trail
+        rule = path(mid+f'-rule-{j}', [[[tx, yy], [tx+tw, yy]]], ink['main'][0], role='structure')
+        rule['line_width'] = .5
+        rule['stroke_opacity'] = 55
+    axis['paths'][0][1][1] = yy
+    axis['rect'] = bounds(axis['paths'], .5)
+    axis['line_width'] = 1
+    return yy + 6
+
+
 def bar_rows(mid, items, tx, yy, tw, body, peak, unit, ink, val, box, path):
     """Give labels, zero-based bars and tabular values their own columns."""
     labels = tw * .34
@@ -35,10 +75,11 @@ def bar_rows(mid, items, tx, yy, tw, body, peak, unit, ink, val, box, path):
     return yy + 5
 
 
-def finish(plan, start, module, region):
+def finish(plan, start, module, region, on_face=None):
     """Place editorial rules and a screen strictly inside measured bar faces."""
     ink = plan['ink_plan']
     objects = plan['objects']
+    before = {id(ob) for ob in objects}
     for ob in objects[start:]:
         if ob['kind'] != 'rect' or ob['role'] != 'data' or not ob.get('fill'):
             continue
@@ -60,3 +101,15 @@ def finish(plan, start, module, region):
         id=module+'-press-rule', kind='path', rect=bounds(paths, .6), paths=paths,
         line=ink['main'][0], line_width=1.2, role='surface',
         layer='surface', material='press-column-rule', anchor='title'))
+    if on_face:
+        # A clipping carries a second hairline, like a newspaper column head.
+        hair = [[[x+10, y+4.4], [right-10, y+4.4]]]
+        objects.insert(start, dict(
+            id=module+'-press-hairline', kind='path', rect=bounds(hair, .3), paths=hair,
+            line=ink['main'][0], line_width=.5, role='surface',
+            layer='surface', material='press-column-rule', anchor='title'))
+        face = next(ob for ob in objects if ob['id'] == on_face)
+        for ob in objects:
+            if id(ob) not in before:
+                ob['on_face'] = on_face
+                face['members'].append(ob['id'])

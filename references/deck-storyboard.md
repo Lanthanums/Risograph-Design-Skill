@@ -56,7 +56,7 @@ when they create a deliberate pause or let one consequential line stand alone.
 | Cover | Give the subject a clear first read. Plan meaningful title breaks, an optional short deck, and a small context cue when the source supplies one. Reserve a quiet field for glyphs. A second and third offset ink layer work at display scale. Move the field or reduce the offset when letterforms lose definition. |
 | Unordered points | Group by meaning. Use one sheet for a compact checklist or stagger separate cards for substantial independent points. Specify the left-right reading path, per-card text measure, and which edge receives texture. Use one sheet when the measured columns crowd the copy. See [English typography and dense copy](deck-typography-and-lists.md). |
 | Ordered points or process | Let position or a continuous line reveal order. Make entry, direction, and outcome explicit. Reserve numbering and arrows for real sequence or causality. Branches need labeled exits and a reading path. |
-| Quotation | Give the exact words a dominant block and keep credit attached. Try a centered broadside for a short line, a separate credit rail for a speaker-led medium excerpt, or a wide paper folio for a long excerpt. Vary placement and ink emphasis across consecutive quotes. Check line breaks and leave enough room for the full quote and credit. |
+| Quotation | Give the exact words a dominant block and keep credit attached. Nominate one quotation for the classic treatment. Every other quotation is set on a torn sheet under a large quotation mark: centred for a short line, to the right for a medium excerpt, or on a wide sheet for a long one. Vary placement across consecutive quotes. Check line breaks and leave enough room for the full quote and credit. |
 | Figure or KPI | Pair a dominant value with metric, unit, population and time frame. Provide the baseline or comparison only when sourced. Use the secondary area for what it explains. Keep the explanation beside the number it qualifies. |
 | Comparison or decision | Align comparable dimensions on a shared baseline. Name the difference or decision up front. Use a bar only for commensurate values. A parallel text spread or a compact table works when tradeoffs are qualitative. |
 | Trend or part-to-whole | Label scales, units and the denominator. Mark the consequential change with an anchored caption. Use a chronological axis only when the source establishes time order. Keep uncertain or missing observations distinct. |
@@ -136,6 +136,11 @@ The page ID and module IDs must match the compiled pages in order.
 Use `light`, `medium`, or `dense` for `density`. Supply `density_reason` when a
 specific constraint or deliberate pause affects the page. Put narration in the
 modules' `notes`. The storyboard Markdown shows those notes separately.
+
+Content pages are set on torn paper by default. Record in each page row's
+`print_role` what the papers do: which sheet dominates, and whether the page
+is rich, `collage: quiet` or `collage: off`. See
+[deck paper collage](deck-paper-collage.md).
 
 Under `page_directions`, key executable controls by page ID. Select
 `composition: cover` for one module with a headline and optional body, plus

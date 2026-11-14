@@ -47,3 +47,9 @@ format or obtain more source content. Evidence-area/dialect warnings remain
 diagnostics, not quality guarantees. Variants still repeat build/binding work
 around batched rendering. Deck renders are cached as a whole, not by page.
 Fixed command latency and cold-render speedups are not guaranteed.
+
+Deck collage adds raster work to the build stage: about one second for each
+collage page at the default 2x plate, measured on a 15-page deck (build 12 s
+without collage, 26 s with it). The papers are stored in the page background
+JPEG, so a deck grows by roughly a tenth. `meta.collage: off` restores the
+v4.5 build time.
