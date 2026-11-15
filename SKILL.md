@@ -17,6 +17,9 @@ Set `meta.lang: en`. Use explicit attribution for translated quotations and pres
 the original in the source ledger. Honor requested verbatim copy and clarify any
 conflict with the English deliverable before drafting.
 
+Read the workflow file for the route and nothing else by default. Each
+workflow names the cases that need a further reference.
+
 Keep output outside the skill. Use one Python interpreter. The routes share
 rendering, font measurement, and file utilities. Each route owns its planning,
 composition, design decisions, and review.

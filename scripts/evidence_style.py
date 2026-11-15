@@ -7,6 +7,7 @@ def apply(plan,start,module,rect,bottom):
     objs=plan['objects'];dialect=plan['dialect'];ink=plan['ink_plan'];rx,ry,x1,_=rect
     seed=int(hashlib.sha256((str(plan['seed'])+module['id']).encode()).hexdigest()[:12],16);rnd=random.Random(seed)
     content=list(objs[start:]);anchor=next((o['id'] for o in content if o['kind']=='text'),'title')
+    if plan.get('print')=='collage':return  # paper and ink come from poster_collage
     def stroke(oid,paths,color=None,material='drawn-line',width=1.3):
         ob=dict(id=oid,kind='path',paths=paths,rect=bounds(paths,width/2),line=color or ink['main'][0],line_width=width,role='surface',rotation=0,anchor=anchor,material=material,layer='surface')
         return ob

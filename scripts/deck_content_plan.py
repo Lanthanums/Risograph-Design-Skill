@@ -58,13 +58,17 @@ def inventory(spec):
                 if isinstance(parent,dict):
                     unit=parent.get('unit');unit_path=path.rsplit('.',1)[0]+'.unit'
                     if not unit:
-                        from source_profile import UNIT
+                        from deck_source_profile import UNIT
                         label=str(parent.get('label',''));match=re.search(r'(?:'+UNIT+r')',label,re.I)
                         if match:unit=match[0];unit_path=path.rsplit('.',1)[0]+'.label'
                     if not unit and root=='chart':
                         chart=spec.get('content',{}).get('chart',{});unit=chart.get('unit');unit_path='chart.unit'
                     if unit:atom['unit_context']=dict(unit=unit,atom=unit_path)
             except (KeyError,ValueError,IndexError,TypeError):pass
+        # An outline states order and contrast through its structure. The
+        # relation is recorded on the atoms of that block.
+        declared=sorted({kind for prefix,kind in (spec.get('relations') or {}).items() if path==prefix or path.startswith(prefix+'.')})
+        if declared:atom['relations']=declared
         atoms.append(atom)
     return atoms
 
@@ -101,7 +105,7 @@ def choose_form(module,prof):
 
 
 def _validate_evidence(module, plan, profile):
-    from source_profile import validate_module
+    from deck_source_profile import validate_module
 
     if 'storyboard' not in plan or module.get('visual') != 'step-flow':
         return validate_module(module, profile)
@@ -247,7 +251,7 @@ def module_basis(m,prof):
                  quantities=[q['provenance'] for q in r['quantities']]) for r in prof['atoms'] if r['atom'] in m.get('atoms',[])]
 
 def evidence_for(plan):
-    from source_profile import profile
+    from deck_source_profile import profile
     prof=profile(inventory(plan['source']))
     raw=plan.get('evidence',{});level=raw.get('level',prof['data_density'])
     # Keep lint aggregated for malformed levels; policy is computed safely.
@@ -327,7 +331,7 @@ def to_spec(plan):
 
 def deck_outline(plan):
     from collections import OrderedDict
-    from source_profile import DATA_FORMS
+    from deck_source_profile import DATA_FORMS
     evidence=evidence_for(plan);evidence['legacy']='evidence' not in plan
     prof=evidence['profile'];groups=OrderedDict();pages=[];slides=[];text_groups={};footers=[]
     for original in plan['modules']:
@@ -404,12 +408,12 @@ def deck_outline(plan):
             ('print_marks', ('rich', 'balanced', 'quiet', 'off')),
             ('paper_collage', ('auto', 'on', 'off')),
             ('list_order', ('unordered', 'ordered')),
-            ('list_layout', ('auto', 'stack', 'side-by-side')),
+            ('list_layout', ('auto', 'stack', 'side-by-side', 'columns')),
             ('paper_layout', ('auto', 'single', 'staggered')),
             ('quote_layout', ('auto', 'margin', 'broadside', 'folio', 'classic')),
             ('quote_priority', ('auto', 'featured', 'supporting')),
             ('case_collage', ('auto', 'on', 'off')),
-            ('collage', ('auto', 'rich', 'quiet', 'off')),
+            ('collage', ('auto', 'lists', 'rich', 'quiet', 'scene', 'off')),
         ):
             if key in page['art_direction'] and page['art_direction'][key] not in allowed:
                 raise ValueError(f"{page_id}: {key} must be one of {', '.join(allowed)}")

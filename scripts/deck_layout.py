@@ -31,7 +31,7 @@ def make_plan(spec,_vertical_pass=False):
     dialect=a.get('dialect','swiss');dialect='swiss' if dialect=='auto' else dialect
     theme=rk.Theme(palette='A',lang=meta.get('lang','en'),fonts=meta.get('fonts'))
     modules=sorted(copy.deepcopy(c.get('modules',[])),key=lambda m:m.get('order',0))
-    from source_profile import profile
+    from deck_source_profile import profile
     evidence=copy.deepcopy(spec.get('evidence',{}))
     if not evidence:
         evidence=dict(profile=profile(inventory({'content':c})),legacy=True)
@@ -96,7 +96,7 @@ def make_plan(spec,_vertical_pass=False):
         if not members:return
         p['regions'].append(dict(id=mid,rect=r,objects=[o['id'] for o in members],column=col))
         p['reading_order'].append(dict(order=len(p['reading_order'])+1,region=mid,objects=[o['id'] for o in members],band=band,column=col,x=members[0]['rect'][0]))
-    title_size = a.get('title_size', 56)
+    title_size = round(a.get('title_size', 56) * a.get('_title_scale', 1))
     comparison = any(m.get('visual') in ('before-after', 'versus', 'contrast-pair') for m in modules)
     if meta.get('lang') == 'en' and comparison and title_size == 44:
         try:
@@ -109,10 +109,12 @@ def make_plan(spec,_vertical_pass=False):
     focal = meta.get('lang') == 'en' and len(modules) == 1 and modules[0].get('visual') in (
         'key-statement', 'pull-quote', 'text', 'icon-bullet')
     cy=title['rect'][3]+25
-    cy0=cy
     # Safe full-line rule outside the glyph envelope, never across uppercase letters.
     if a.get('title_rule', True):
         objs.append(title_rule(title, cy-8, ink['accent']))
+    # The rule stays with the title; extra room opens between rule and content.
+    cy+=a.get('_title_gap', 0)
+    cy0=cy
     mains=[(i,m) for i,m in enumerate(modules) if m.get('level')!=4 and not (m.get('level')==1 and (m.get('role')=='title' or text(m)==c['title']))]
     foot=[(i,m) for i,m in enumerate(modules) if m.get('level')==4]
     # Semantic groups are indivisible bands. Process/timeline and high-weight heroes
@@ -136,7 +138,8 @@ def make_plan(spec,_vertical_pass=False):
     if press_spread:
         rows = [mains]
     footer_height=sum(tf.fit(text(m),theme.f_body,16,w-20,H,minimum=16,ls=1.08).height+12 for _,m in foot)+16 if foot else 0
-    if width_fraction is None and a.get('_collage') in ('rich', 'quiet') and len(mains) == 1:
+    pictured = a.get('_collage') == 'under' and a.get('image')
+    if width_fraction is None and (a.get('_collage') in ('rich', 'quiet') or pictured) and len(mains) == 1:
         # One module shares the page with a paper scene: copy keeps a reading
         # measure and a chart the width of a newspaper graphic.
         lone = mains[0][1]['visual']
@@ -212,6 +215,9 @@ def make_plan(spec,_vertical_pass=False):
         factor=min(policy['body_max']/body,max(1,available/max(1,needed)))
         ca['body_size']=round(body*factor*2)/2
         ca['title_size']=min(max(56,a.get('title_size',44)),round(a.get('title_size',44)*factor))
+        if a.get('_title_scale'):
+            # A compact title grows only a little with spare height.
+            ca['title_size']=min(ca['title_size'],round(a.get('title_size',44)*1.1))
         ca['_gap']=gap
         for trial in range(round(ca['body_size']*2),round(body*2),-1):
             ca['body_size']=trial/2

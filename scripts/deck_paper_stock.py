@@ -253,6 +253,13 @@ def render_piece(piece, theme, scale, seed):
     grain = _texture(H, W, stock, scale, rng)
     face = np.broadcast_to(colors.get(stock, colors['bone'])[None, None, :], (H, W, 3)).copy()
     origin = (int(rng.integers(0, 64)), int(rng.integers(0, 64)))
+    if piece.get('picture'):
+        from deck_picture import riso_print
+        margin = int(round(piece['picture'].get('margin', 6) * scale))
+        inner_w, inner_h = w - 2 * margin, h - 2 * margin
+        if inner_w > 8 and inner_h > 8:
+            face[pad + margin:pad + margin + inner_h, pad + margin:pad + margin + inner_w] = riso_print(
+                piece['picture'], inner_w, inner_h, theme, scale, rng)
     for layer in piece.get('print', ()):
         kind = layer['kind']
         color = theme[layer['ink']] if layer.get('ink') in theme else layer.get('color', theme['inkA'])
@@ -278,6 +285,22 @@ def render_piece(piece, theme, scale, seed):
             coverage = np.zeros((H, W), np.float32)
             coverage[pad + int(y0 * h):pad + int(y1 * h), pad + int(x0 * w):pad + int(x1 * w)] = 1
             coverage = coverage * _flood(H, W, scale, rng, .95)
+        elif kind == 'marks':
+            # Printed furniture in piece points: bars, hairlines, and the
+            # dry film of a highlighter when ``rough`` is set.
+            coverage = np.zeros((H, W), np.float32)
+            for x0, y0, x1, y1 in layer['rects']:
+                top, left = pad + int(round(y0 * scale)), pad + int(round(x0 * scale))
+                bottom = max(top + 1, pad + int(round(y1 * scale)))
+                right = max(left + 1, pad + int(round(x1 * scale)))
+                coverage[max(0, top):bottom, max(0, left):right] = 1
+            if layer.get('rough'):
+                soft = np.asarray(Image.fromarray((coverage * 255).astype(np.uint8)).filter(
+                    ImageFilter.GaussianBlur(.9 * scale)), np.float32) / 255
+                streak = .8 + .2 * noise2(H, W, 2.4 * scale, rng) + .08 * np.sin(yy / (.9 * scale))
+                coverage = np.clip(soft * 1.25, 0, 1) * streak
+            else:
+                coverage = coverage * _flood(H, W, scale, rng, .96)
         else:
             raise ValueError(f'Unknown print layer {kind!r}')
         dx, dy = layer.get('offset', (0, 0))

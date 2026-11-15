@@ -433,12 +433,18 @@ def _make_swiss_plan(spec):
     p['reading_order']=[{'id':o['id'],'source':o.get('source'),'role':o['role'],'rect':o['rect']} for o in objs if o['kind']=='text']
     return p
 
-def draw(slide,p,theme):
+def draw(slide,p,theme,plates=None):
     """Native vectors and text. Multiply intersections remain editable objects."""
+    plates=plates or {}
     from pptx.enum.shapes import MSO_SHAPE
     for o in p['objects']:
         x,y,x1,y1=o['rect'];w=x1-x;h=y1-y
-        if o['kind']=='path':
+        if o['kind']=='plate':
+            # The torn-paper layer: one picture under every native object.
+            from pptx.util import Pt
+            picture=slide.shapes.add_picture(str(plates[o['id']]),Pt(x),Pt(y),Pt(w),Pt(h))
+            picture.name=f"art[{o['id']}]"
+        elif o['kind']=='path':
             from poster_primitives import native_path
             native_path(slide,o)
         elif o['kind']=='text':
@@ -504,8 +510,24 @@ def build(spec,out_path,plan=None):
     canvas=poster_canvas(spec.get('canvas'));inks=p['ink_plan'];media=aio.paths(out)[2];media.mkdir(exist_ok=True)
     theme=rk.Theme(palette='A',lang=spec.get('meta',{}).get('lang','en'),fonts=spec.get('meta',{}).get('fonts'))
     # Low amplitude paper grain: quiet enough for 16pt detail at export resolution.
-    bg=media/'bg1.png';bg.write_bytes(paper_bytes(canvas.width,canvas.height,inks['paper'],spec.get('meta',{}).get('seed',1),p.get('dialect','swiss')))
-    prs=rk.new_deck(canvas);slide=rk.add_page(prs,str(bg));slide.shapes[0].name='riso-paper[background]';draw(slide,p,theme)
+    plates={};collage_record=None
+    if p.get('collage'):
+        # Print collage: the ground carries the ink fields, the plate the paper.
+        import poster_collage
+        from concurrent.futures import ThreadPoolExecutor
+        scale=float(spec.get('meta',{}).get('scale',2))
+        bg=media/'bg1.jpg';plate=media/p['collage'].get('file','collage1.png')
+        # Ground and paper are independent rasters: render and encode them side by side.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            ground_job=pool.submit(lambda:poster_collage.render_ground(p,scale).save(bg,quality=91,subsampling=0))
+            plate_job=pool.submit(lambda:poster_collage.render_plate(p,scale).image().save(plate,compress_level=6))
+            ground_job.result();plate_job.result()
+        plates['collage-plate']=plate
+        collage_record=dict(file=plate.name,bytes=plate.stat().st_size,sha256=hashlib.sha256(plate.read_bytes()).hexdigest(),
+                            pieces=[dict(id=q['id'],role=q['role'],rect=q['rect'],stock=q.get('stock','bone'),rotation=q.get('rotation',0)) for q in p['collage']['pieces']])
+    else:
+        bg=media/'bg1.png';bg.write_bytes(paper_bytes(canvas.width,canvas.height,inks['paper'],spec.get('meta',{}).get('seed',1),p.get('dialect','swiss')))
+    prs=rk.new_deck(canvas);slide=rk.add_page(prs,str(bg));slide.shapes[0].name='riso-paper[background]';draw(slide,p,theme,plates)
     # Delete only empty text boxes. Native rectangles carry an empty txBody by
     # OOXML convention and must remain as editable chart/diagram geometry.
     from pptx.enum.shapes import MSO_SHAPE_TYPE
@@ -518,6 +540,8 @@ def build(spec,out_path,plan=None):
         for color in sorted({o.get(k) for o in p['objects'] for k in ('color','fill','line') if o.get(k)}):
             if color not in tokens.values():tokens['derived-'+str(len(tokens))]=color
     manifest={'tokens':tokens,'pages':[{'page':1,'file':bg.name,'reversed':False,'sha256':hashlib.sha256(bg.read_bytes()).hexdigest()}],'total_bytes':bg.stat().st_size}
+    if collage_record:
+        manifest['pages'][0]['paper_plate']=collage_record;manifest['total_bytes']+=collage_record['bytes']
     (media/'manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
     style={'skill':'riso-slides','version':p['version'],'artifact':'poster','canvas_spec':canvas.to_dict(),'fonts':theme.fonts,'font_diagnostics':theme.font_diagnostics,'palette':{'tokens':tokens},'poster':{'art_direction':p,'background_sha256':manifest['pages'][0]['sha256']},'pages':[{'n':1,'archetype':p['archetype']}]}
     aio.write_style(out,style)

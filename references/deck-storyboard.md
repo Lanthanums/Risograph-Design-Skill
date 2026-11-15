@@ -54,9 +54,9 @@ when they create a deliberate pause or let one consequential line stand alone.
 | Job | Design decision and fallback |
 | --- | --- |
 | Cover | Give the subject a clear first read. Plan meaningful title breaks, an optional short deck, and a small context cue when the source supplies one. Reserve a quiet field for glyphs. A second and third offset ink layer work at display scale. Move the field or reduce the offset when letterforms lose definition. |
-| Unordered points | Group by meaning. Use one sheet for a compact checklist or stagger separate cards for substantial independent points. Specify the left-right reading path, per-card text measure, and which edge receives texture. Use one sheet when the measured columns crowd the copy. See [English typography and dense copy](deck-typography-and-lists.md). |
+| Unordered points | Group by meaning. Three or four points with a cue and a detail get a torn card each, five to eight get two ruled sheets, and points without a detail share one ruled sheet. See [English typography and dense copy](deck-typography-and-lists.md). |
 | Ordered points or process | Let position or a continuous line reveal order. Make entry, direction, and outcome explicit. Reserve numbering and arrows for real sequence or causality. Branches need labeled exits and a reading path. |
-| Quotation | Give the exact words a dominant block and keep credit attached. Nominate one quotation for the classic treatment. Every other quotation is set on a torn sheet under a large quotation mark: centred for a short line, to the right for a medium excerpt, or on a wide sheet for a long one. Vary placement across consecutive quotes. Check line breaks and leave enough room for the full quote and credit. |
+| Quotation | Give the exact words a dominant block and keep credit attached. Nominate one quotation for the classic treatment. It is set on a flooded ink field with a dot screen. Every other quotation sits on the open page under a large quotation mark, with overprinted circles at the foot: centred for a short line, with a credit rail for a medium excerpt, or on a wide folio for a long one. Vary placement across consecutive quotes. Check line breaks and leave enough room for the full quote and credit. |
 | Figure or KPI | Pair a dominant value with metric, unit, population and time frame. Provide the baseline or comparison only when sourced. Use the secondary area for what it explains. Keep the explanation beside the number it qualifies. |
 | Comparison or decision | Align comparable dimensions on a shared baseline. Name the difference or decision up front. Use a bar only for commensurate values. A parallel text spread or a compact table works when tradeoffs are qualitative. |
 | Trend or part-to-whole | Label scales, units and the denominator. Mark the consequential change with an anchored caption. Use a chronological axis only when the source establishes time order. Keep uncertain or missing observations distinct. |
@@ -93,6 +93,9 @@ and preserve any deliberately quiet moments. Keep uncertainty explicit.
 
 ## Content-plan fields
 
+Most decks are written as an outline (see [the workflow](deck-workflow.md)),
+which derives everything in this section. Write the full plan by hand only
+when the deck needs a ledger against an external source document.
 Use `deck_content_plan.scaffold(source)` to obtain the source SHA and atom inventory,
 then author and bind your own modules and ledger. Set `target: deck`,
 `mode: storyboard`, and `meta.lang: en` for new slides. Modules use the existing
@@ -137,9 +140,10 @@ Use `light`, `medium`, or `dense` for `density`. Supply `density_reason` when a
 specific constraint or deliberate pause affects the page. Put narration in the
 modules' `notes`. The storyboard Markdown shows those notes separately.
 
-Content pages are set on torn paper by default. Record in each page row's
-`print_role` what the papers do: which sheet dominates, and whether the page
-is rich, `collage: quiet` or `collage: off`. See
+Pages that list information are set on torn paper and other pages stay
+open. Record in a list page's `print_role` what the papers do, and set
+`collage` on a page that should differ from the default. Name the words that
+carry a statement in the module's `visual_data.emphasis`. See
 [deck paper collage](deck-paper-collage.md).
 
 Under `page_directions`, key executable controls by page ID. Select

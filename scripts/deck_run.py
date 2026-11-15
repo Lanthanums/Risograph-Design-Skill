@@ -39,11 +39,21 @@ def run(args):
                 with contextlib.redirect_stdout(buf),contextlib.redirect_stderr(buf):rc=importlib.import_module(name.split('-')[0]).main()
             finally:sys.argv=old
             (out/(name+'.log')).write_text(buf.getvalue(),encoding='utf-8')
-            if rc:raise ValueError(name+' failed: '+buf.getvalue()[-1800:])
+            if rc:
+                # Report the failures, not the passing checks around them.
+                failed=[line.strip() for line in buf.getvalue().splitlines() if '[FAIL]' in line]
+                raise ValueError(name+' failed ('+name+'.log has the full report):\n'+('\n'.join(failed[:12]) if failed else buf.getvalue()[-900:]))
         timed(name,execute)
     try:
         from deck_content_plan import compile_plan,gate,text
         require_storyboard = getattr(args, 'require_storyboard', False)
+        if getattr(args, 'outline', None):
+            from deck_outline import advice, expand
+            from deck_content_plan import save
+            authored = json.loads(Path(args.outline).read_text(encoding='utf-8-sig'))
+            expanded = timed('outline', lambda: expand(authored))
+            status['advice'] = advice(authored)[:5]
+            args.plan = str(out/'content-plan.json'); save(expanded, args.plan); require_storyboard = True
         if args.plan:
             plan=json.loads(Path(args.plan).read_text(encoding='utf-8-sig'))
             if plan.get('target')!='deck':raise ValueError('deck_run requires target=deck')
@@ -61,7 +71,8 @@ def run(args):
                 plan = json.loads(Path(args.content_plan).read_text(encoding='utf-8-sig'))
             (out/'storyboard.md').write_text(markdown(plan, text), encoding='utf-8')
         from build_deck import build
-        deck=out/'deck.pptx';timed('build',lambda:build(spec,deck,Path(args.spec).resolve().parent if args.spec else Path(args.plan).resolve().parent))
+        base = Path(args.spec or getattr(args, 'outline', None) or args.plan).resolve().parent
+        deck=out/'deck.pptx';timed('build',lambda:build(spec,deck,base))
         command('qa',['--deck',deck,'--json',out/'qa.json'])
         command('layout_check',['--deck',deck,'--json',out/'layout.json'])
         if args.draft:
@@ -78,12 +89,13 @@ def run(args):
                 lambda:command('render',['--deck',deck,'--out',out/'preview','--keep-pdf',*opts]),args.mode))
             command('qa-rendered',['--deck',deck,'--render',out/'preview','--require-render','--json',out/'qa-rendered.json'])
             status.update(status='RENDERED_QA_PASS',render=render_status)
-            from deck_preview import review_images, RUBRIC, variants_contact
+            from deck_preview import review_images, review_sheets, RUBRIC, variants_contact
             pngs=sorted((out/'preview').glob('page-*.png'));visual=out/'visual';visual.mkdir(exist_ok=True)
             for png in pngs:
                 row=review_images(png,visual/png.stem);row.update(reviewer='',viewed=dict(full=False,thumbnail=False,blur=False),scores=dict.fromkeys(RUBRIC),weaknesses=[],pptx_sha256=sha(deck),source_sha256=sha(out/'source.json'),plan_sha256=spec.get('content_plan',{}).get('plan_sha256'))
                 write(visual/png.stem/'review.json',row)
             variants_contact(pngs,visual/'contact.png')
+            status['review']=[p.relative_to(out).as_posix() for p in review_sheets(pngs,visual)]
         else:status['status']='GEOMETRY_PASS'
     except Exception as exc:status.update(status='FAILED',error=str(exc))
     finally:
@@ -93,7 +105,10 @@ def run(args):
         plans=[r['plan'] for r in style.get('evidence_pages',[])]
         font_rows=presentation_fonts(out/'deck.pptx') if stages.get('build',{}).get('exit_code')==0 else []
         timings['total']=round(time.perf_counter()-start,4)
-        status['next']='Inspect visual/contact.png and per-page review scaffolds; aesthetic scores remain unfilled.'
+        status['next']='Look at the review sheets, then open a full page in preview/ only to confirm a defect.' if status.get('review') else 'Fix the reported error and run again.' if status['status']=='FAILED' else 'Render with --auto for review images.'
+        if style:
+            from deck_preview import page_map
+            status['map']=page_map(style,[p.get('archetype') for p in spec.get('pages',[])])
         write(out/'run.json',status);write(out/'timings.json',timings)
         write(out/'summary.json',dict(status=status['status'],render=status['render'],engine_seconds=timings['total'],stages=timings,evidence_level=spec.get('evidence',{}).get('level'),pages=len(spec.get('pages',[])),page_types=[p.get('archetype') for p in spec.get('pages',[])],metrics=[p.get('infographic_metrics') for p in plans],error=status.get('error'),visual_review=status['visual_review']))
         from input_cache import output_files
@@ -104,24 +119,28 @@ def run(args):
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
-    for k in ('spec','plan','content-plan','out','kit','node'):ap.add_argument('--'+k)
+    for k in ('spec','plan','outline','content-plan','out','kit','node'):ap.add_argument('--'+k)
     for k in ('auto','render','draft','system','autodiscover','skip-plan','require-storyboard'):ap.add_argument('--'+k,action='store_true')
     ap.add_argument('--mode',choices=['fast','audit'],default='fast');ap.add_argument('--dpi',type=int,default=110)
     a=ap.parse_args()
-    if not a.out or not (a.plan or a.spec):ap.error('--out and --plan/--spec required')
-    if a.plan and a.spec:ap.error('choose --plan or --spec')
+    if not a.out or not (a.plan or a.spec or a.outline):ap.error('--out and one of --outline/--plan/--spec required')
+    if sum(bool(v) for v in (a.plan, a.spec, a.outline)) > 1:ap.error('choose one of --outline, --plan or --spec')
     if a.skip_plan and a.require_storyboard:ap.error('--skip-plan cannot be combined with --require-storyboard')
     if a.system and (a.kit or a.autodiscover):ap.error('--system is exclusive with --kit/--autodiscover')
     a.system = not (a.kit or a.autodiscover)
     from input_cache import key,restore,store
     options={k:v for k,v in vars(a).items() if k not in ('spec','plan','content_plan','out','mode')};options['artifact']='deck'
-    cache,payload=key(dict(spec=a.spec,plan=a.plan or a.content_plan),options)
+    cache,payload=key(dict(spec=a.spec,plan=a.outline or a.plan or a.content_plan),options)
     status=restore(cache,a.out) if a.mode!='audit' else None
     if status is None:
         status=run(a)
         if status['status']!='FAILED':store(cache,a.out,payload)
-    for k in ('status','render','cache','error','next'):
+    for k in ('status','render','cache','error'):
         if k in status:print(k+': '+str(status[k]))
+    for line in status.get('map',()):print(line)
+    for line in status.get('advice',()):print('advice: '+line)
+    if status.get('review'):print('review: '+' '.join(status['review']))
+    print('next: '+status['next'])
     print('evidence: '+str(Path(a.out).resolve()));return int(status['status']=='FAILED')
 
 if __name__=='__main__':raise SystemExit(main())

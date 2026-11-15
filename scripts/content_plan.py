@@ -65,6 +65,9 @@ def inventory(spec):
                         chart=spec.get('content',{}).get('chart',{});unit=chart.get('unit');unit_path='chart.unit'
                     if unit:atom['unit_context']=dict(unit=unit,atom=unit_path)
             except (KeyError,ValueError,IndexError,TypeError):pass
+        # A poster outline states order and contrast through its structure.
+        declared=sorted({kind for prefix,kind in (spec.get('relations') or {}).items() if path==prefix or path.startswith(prefix+'.')})
+        if declared:atom['relations']=declared
         atoms.append(atom)
     return atoms
 
@@ -208,7 +211,14 @@ def module_basis(m,prof):
 
 def evidence_for(plan):
     from source_profile import profile
-    prof=profile(inventory(plan['source']))
+    atoms=inventory(plan['source']);prof=profile(atoms)
+    # The source parser reads wording only. A relation the outline declares is
+    # recorded on the atom's evidence here, marked as declared.
+    declared={a['id']:a['relations'] for a in atoms if a.get('relations')}
+    for row in prof['atoms']:
+        for kind in declared.get(row['atom'],()):
+            if not any(t['kind']==kind for t in row['evidence']):
+                row['evidence'].append(dict(kind=kind,strength=.8,declared='outline structure',provenance=dict(atom=row['atom'],start=0,end=len(row['text']),quote=row['text'])))
     raw=plan.get('evidence',{});level=raw.get('level',prof['data_density'])
     # Keep lint aggregated for malformed levels; policy is computed safely.
     try:

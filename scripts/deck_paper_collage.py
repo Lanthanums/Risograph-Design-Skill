@@ -2,7 +2,7 @@
 
 The builder draws every page this way first, to keep the cover, dividers and
 classic quotation stable, and uses it for pages with ``collage: off``. Collage
-pages are then redrawn by ``deck_collage`` and ``paper_stock``.
+pages are then redrawn by ``deck_collage`` and ``deck_paper_stock``.
 """
 from hashlib import sha256
 import math

@@ -32,6 +32,10 @@ def render_module(index,m,rect,context,band=1,col=0):
         paper_panel = False
     staggered = (paper_panel or collage) and visual == 'takeaway-list' and use_cards(
         d.get('items', []), rw, order, list_layout, context.get('paper_layout', 'auto'), collage)
+    from deck_list_layout import use_columns
+    split = (collage and visual == 'takeaway-list' and not staggered
+             and use_columns(d.get('items', []), rw, context.get('paper_layout', 'auto')))
+    staggered = staggered or split
     papers = []
     if paper_panel and not staggered:
         tx, tw, yy = rx + 22, rw - 48, ry + 18
@@ -269,7 +273,11 @@ def render_module(index,m,rect,context,band=1,col=0):
                 label=val(f'visual_data.items.{j}.label',item['label'],tx+45,yy,tw-45,body,True);yy=label['rect'][3]+8
                 if item.get('text'):yy=val(f'visual_data.items.{j}.text',item['text'],tx+45,yy,tw-45,body)['rect'][3]+10
     elif visual == 'takeaway-list' and d.get('items') and context.get('editorial_lists'):
-        if staggered and collage:
+        if split:
+            from deck_list_layout import render_collage_columns
+            yy, papers = render_collage_columns(p, d['items'], (rx, yy, rw), body, mid, val, order)
+            yy += 6
+        elif staggered and collage:
             from deck_list_layout import render_collage_cards
             yy, papers = render_collage_cards(p, d['items'], (rx, yy, rw), body, mid, val, order,
                                               context.get('loosen', 0))
@@ -281,7 +289,8 @@ def render_module(index,m,rect,context,band=1,col=0):
             yy += 9
         else:
             from deck_list_layout import render_items
-            yy = render_items(d['items'], tx, yy, tw, body, ink, mid, val, path, order, list_layout)
+            yy = render_items(d['items'], tx, yy, tw, body, ink, mid, val, path, order, list_layout,
+                              lead_ins=bool(collage))
     elif visual in ('takeaway-list','concept-stack','hub-spoke','keyword-band') and d.get('items'):
         for j,item in enumerate(d['items']):
             if visual=='takeaway-list':
@@ -309,6 +318,19 @@ def render_module(index,m,rect,context,band=1,col=0):
             width = min(tw - indent, 600) if callout else tw - indent
             ob=put(mid+'-body-'+str(j),para,tx+indent,yy,width,size,base+'.body','argument',visual=='key-statement')
             ob['source_part']=j;yy=ob['rect'][3]+body*.6
+            # The few words that carry the statement: named by the author,
+            # or the closing phrase after a colon or dash on a sheet.
+            from deck_sheet_type import auto_emphasis, find, span
+            phrase = d.get('emphasis') if visual in ('key-statement', 'text', 'summary-box') else None
+            if phrase and ' '.join(str(phrase).split()) not in ' '.join(str(m['body']).split()):
+                raise ValueError(mid + ': emphasis must quote words from the body exactly')
+            if not phrase and collage and visual == 'key-statement' and ob['fit']['size'] > 24:
+                phrase = auto_emphasis(para)
+            found = find(ob['fit']['lines'], phrase) if phrase else None
+            if found and collage and ob['fit']['size'] > 24:
+                ob.setdefault('swipes', []).append(found)
+            elif found:
+                span(ob, found[0], found[1], color=ink['main'][1])
         if callout and yy > callout_top:
             mark = path(mid + '-conclusion-rule', [[[tx+2,callout_top], [tx+2,yy-6]]],
                         ink['main'][0], role='emphasis', anchor=mid+'-body-0')
@@ -370,7 +392,7 @@ def render_module(index,m,rect,context,band=1,col=0):
         bottom = face['rect'][3]
     if bottom>ry+rh+1:raise ValueError(f'{mid}: needs {bottom-ry:.1f}pt; allocated {rh:.1f}pt. Increase module weight or choose fewer columns; preserve copy.')
     node(mid,members,[rx,ry,rx+rw,ry+rh],band,col)
-    from source_profile import TEXT_FORMS
+    from deck_source_profile import TEXT_FORMS
     p['module_metrics'].append(dict(id=mid,level=m.get('level'),visual=visual,rect=[rx,ry,rx+rw,ry+rh],
                                     text_only=visual in TEXT_FORMS,weight=m.get('weight',1),group=m.get('group')))
     if papers:

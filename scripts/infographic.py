@@ -13,7 +13,36 @@ from content_plan import words,text,leafs,VISUALS
 from evidence_forms import FORMS
 from evidence_scale import scale
 
-def make_plan(spec,_vertical_pass=False):
+class FlatOverflow(ValueError):
+    """The original flat layout ran out of vertical space."""
+
+
+def make_plan(spec):
+    import poster_print
+    from poster_flow import voids
+
+    direction = spec.get('art_direction', {})
+    if poster_print.print_style(direction) == 'collage':
+        return poster_print.make_plan(spec)
+    if direction.get('print') != 'flat' or direction.get('dialect', 'auto') not in ('swiss', 'auto') \
+            or not direction.get('autofit', True):
+        return _flat_plan(spec)
+
+    try:
+        plan = _flat_plan(spec)
+    except FlatOverflow:
+        pass
+    else:
+        # Retain the existing layout when it already fits and its copy has no voids.
+        if plan['infographic_metrics']['internal_void']['share'] <= .08 and not any(
+                not gap['intentional'] for gap in voids(plan)):
+            return plan
+    plan = poster_print.make_plan(spec, flat=True)
+    plan['autofit']['changes'].insert(0, 'Reflowed the flat layout with the measured module grid')
+    return plan
+
+
+def _flat_plan(spec, _vertical_pass=False):
     from poster_direction import INKS,digest
     c=spec['content'];a=spec.get('art_direction',{});meta=spec.get('meta',{})
     canvas=poster_canvas(spec.get('canvas'));x,y,x1,y1=canvas.safe;w=x1-x;H=canvas.height
@@ -116,7 +145,7 @@ def make_plan(spec,_vertical_pass=False):
         if not candidates:
             if columns>1:
                 alternate=copy.deepcopy(spec);alternate.setdefault('art_direction',{})['columns']=columns-1
-                retry=make_plan(alternate)
+                retry=_flat_plan(alternate)
                 retry['autofit']['changes'].append('Reduced columns to keep a semantic group together')
                 return retry
             raise ValueError('Cannot keep grouped modules together in this width')
@@ -124,7 +153,7 @@ def make_plan(spec,_vertical_pass=False):
         rowheight.append(required);rowpacks.append((stacks,heights,rw))
     needed=sum(rowheight)+gap*max(0,len(rows)-1)
     if needed>available:
-        raise ValueError(f'Infographic requires {needed:.1f}pt; available {available:.1f}pt at {body}pt body; row heights {[round(v,1) for v in rowheight]}. Change columns/grouping or explicitly adapt copy; no automatic deletion.')
+        raise FlatOverflow(f'Infographic requires {needed:.1f}pt; available {available:.1f}pt at {body}pt body; row heights {[round(v,1) for v in rowheight]}. Change columns/grouping or explicitly adapt copy; no automatic deletion.')
     if not _vertical_pass and not evidence.get('legacy') and a.get('autofit',True) and available-needed>80 and body<policy['body_max']:
         candidate=copy.deepcopy(spec);ca=candidate.setdefault('art_direction',{})
         factor=min(policy['body_max']/body,max(1,available/max(1,needed)))
@@ -134,7 +163,7 @@ def make_plan(spec,_vertical_pass=False):
         for trial in range(round(ca['body_size']*2),round(body*2),-1):
             ca['body_size']=trial/2
             try:
-                retry=make_plan(candidate,True)
+                retry=_flat_plan(candidate,True)
                 retry['autofit']['changes'].append(f'Vertical adaptation: body {body:g}->{ca["body_size"]:g}pt; title ->{ca["title_size"]}pt; gap ->{ca["_gap"]}pt, source unchanged')
                 return retry
             except ValueError:continue

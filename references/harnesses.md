@@ -75,7 +75,7 @@ input in a JSON file with can_view_images (boolean), command_timeout_seconds
 | Command timeout >=180 seconds | One foreground --render command after geometry is settled. |
 | Short timeout, background jobs supported | Start the render once, retain its job ID, poll that job. Never wrap cheap planning in a background job. |
 | Short timeout, no background jobs | Use an external renderer or a longer command limit; retain editable PPTX and mark rendered QA unverified. |
-| Can inspect images | Inspect full/10%/blur contact; fill nine scores and only observed weaknesses. |
+| Can inspect images | Deck: read the review sheets in `visual/`, then open a full page only to confirm a defect. Poster: inspect full, 10% and blur. Fill review scores only when a review record is requested. |
 | Cannot inspect images | Request human visual inspection; geometry/pixels cannot substitute for aesthetic approval. |
 
 Export measured trials using references/trial-template.json or

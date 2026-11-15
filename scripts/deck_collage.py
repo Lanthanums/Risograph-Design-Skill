@@ -3,7 +3,7 @@
 The evidence writers ask for reading faces under their measured copy. This
 module arranges everything else around them: one dominant field, a few
 slivers of colour, tape, and a small paper scene in a large opening. Pieces
-are rendered by ``paper_stock`` into the page plate. Copy stays native.
+are rendered by ``deck_paper_stock`` into the page plate. Copy stays native.
 """
 from hashlib import sha256
 import math
@@ -482,11 +482,17 @@ def compose(plan, direction, title_rect, loose):
         else:
             composer.reading_sheet(face, rich=mode == 'rich' or len(singles) == 1)
     _overprints(plan, composer)
-    if mode != 'quiet' and direction.get('_collage_vignette', True):
+    picture = direction.get('image')
+    if picture or (mode != 'quiet' and direction.get('_collage_vignette', True)):
         occupied = keepout + [inflate(p['rect'], 12) for p in composer.under + composer.faces + composer.over]
         frame = (FRAME[0] + 18, max(FRAME[1] + 14, title_rect[3] + 12), FRAME[2] - 16, FRAME[3] - 8)
         opening = largest_opening(occupied, frame)
-        if opening and (opening[2] - opening[0]) * (opening[3] - opening[1]) >= 21000:
+        if picture:
+            from deck_picture import mount
+            if not opening:
+                raise ValueError('No room for the picture beside this copy')
+            mount(composer, opening, picture)
+        elif opening and (opening[2] - opening[0]) * (opening[3] - opening[1]) >= 21000:
             # A scene stays smaller than the evidence it accompanies.
             ow, oh = opening[2] - opening[0], opening[3] - opening[1]
             width, height = min(ow, 400), min(oh, 300)
@@ -496,6 +502,8 @@ def compose(plan, direction, title_rect, loose):
             y0 = opening[1] + (oh - height) * (.5 if oh > ow else 1)
             charts = any(f['family'] == 'chart' for f in faces) or direction.get('_press_chart')
             composer.vignette([x0, y0, x0 + width, y0 + height], 'press' if charts and width / height < 1.9 else None)
+    from deck_sheet_type import dress
+    dress(plan, composer.faces, composer.variant)
     result = composer.pieces()
     tilt_members(plan, result['pieces'])
     stocks = {piece['face']: piece.get('stock', 'bone') for piece in result['pieces'] if piece.get('face')}
@@ -521,7 +529,7 @@ def _mask(ink, height, width, scale):
 
 def render(collage, theme, seed, size=(960.0, 540.0), scale=2):
     """Rasterise a page collage to one transparent plate."""
-    import paper_stock as ps
+    import deck_paper_stock as ps
 
     plate = ps.Plate(size, scale, theme, seed)
     for piece in collage['pieces']:

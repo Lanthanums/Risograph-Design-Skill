@@ -45,6 +45,12 @@ def quantity(raw):
 
 def quantities(s,atom,context=None):
     accepted=[];excluded=[]
+    if context and re.fullmatch(r'[+-]?\d[\d,]*(?:\.\d+)?', s):
+        # A scalar in a typed field has an explicit unit. Identifier heuristics
+        # are for prose, where a long run of digits may be a phone number.
+        number,unit=quantity(s+str(context['unit']))
+        return [dict(raw=s,value=number,unit=unit,unit_provenance=context,
+                     provenance=dict(atom=atom,start=0,end=len(s),quote=s))], excluded
     # Global identifiers/dates, including embedded tokens in phone strings.
     blocked=[]
     patterns=[(r'\b(?:19|20)\d{2}(?:[-/.年]\d{1,2}(?:[-/.月]\d{1,2}日?)?)?\b','year/date'),

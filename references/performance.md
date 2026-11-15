@@ -1,5 +1,31 @@
 # Performance and cache
 
+## Context and tokens
+
+A normal deck needs `SKILL.md` and the deck workflow, about 1,700 words
+together. The other references are for the cases the workflow names.
+
+- Write an outline, not a full plan. An outline for a 13-page deck is about
+  6 KB. The plan it expands to is about 100 KB, and the builder writes it.
+- Run one command. It prints the status, a one-line page map, any page it
+  adjusted and the review sheets. A failure prints only the failing checks.
+  Do not open the logs, the style sidecar or the storyboard file to learn
+  what happened.
+- Review on the sheets in `visual/`. One sheet of six slides costs about as
+  much to look at as one full-size slide. Open a full page only to confirm a
+  defect.
+- Rebuild after a change to the outline. An unchanged input is restored from
+  the cache.
+
+A normal poster needs `SKILL.md` and the poster workflow, about 1100 words
+together. Its outline is about 1 KB and the plan the builder writes from it
+about 45 KB. The run prints the status, one `sheet:` line and any adjustment,
+and the `review:` line names the one image to look at.
+
+The builder absorbs the common reasons for a failed run: a long list is set
+in two columns before copy is refused, a figure may use the source's own
+unit, and an outline states order and contrast through its structure.
+
 Run `doctor.py --out OUTPUT` once per environment; use `--refresh` after changes.
 Choose `--draft` while planning and `--auto` for final checks.
 
@@ -48,8 +74,15 @@ diagnostics, not quality guarantees. Variants still repeat build/binding work
 around batched rendering. Deck renders are cached as a whole, not by page.
 Fixed command latency and cold-render speedups are not guaranteed.
 
+The poster print collage renders its ground and its paper side by side and
+prepares the paper pieces on four threads. On an A3 sheet at the default 2x
+the build stage takes about 2 s, and a whole audited run with a LibreOffice
+render about 7 s. A cached run returns in under a second. The paper is a separate PNG of 2 to 3 MB, so a
+poster file is about 3 MB. `--draft` plans without rendering paper.
+
 Deck collage adds raster work to the build stage: about one second for each
-collage page at the default 2x plate, measured on a 15-page deck (build 12 s
-without collage, 26 s with it). The papers are stored in the page background
+page with paper at the default 2x plate. On a 15-page deck the build takes
+12 s without collage and about 24 s with the default, where eleven pages take
+paper or a scene. The papers are stored in the page background
 JPEG, so a deck grows by roughly a tenth. `meta.collage: off` restores the
 v4.5 build time.

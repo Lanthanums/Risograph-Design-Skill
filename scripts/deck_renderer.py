@@ -20,7 +20,7 @@ def _turn(shape, obj):
 
 
 def face_color(theme, stock):
-    import paper_stock as ps
+    import deck_paper_stock as ps
     tokens = dict(paper=theme.paper, ink=theme.ink)
     return ps.to_hex(ps.stock_colors(tokens).get(stock, ps.stock_colors(tokens)['bone']))
 
@@ -40,6 +40,9 @@ def apply_colors(plan, theme):
                 obj[key] = printed[obj[key]]
             elif obj.get(key) == ink['paper']:
                 obj[key] = stock
+        for item in obj.get('spans', ()):
+            if item.get('color') in printed:
+                item['color'] = printed[item['color']]
         if 'background' in obj:
             obj['background'] = stock
     mapping = {ink['main'][0]: theme.display_ink, ink['main'][1]: theme.inkB,
@@ -49,6 +52,9 @@ def apply_colors(plan, theme):
         for key in ('color', 'fill', 'line', 'background'):
             if obj.get(key) in mapping:
                 obj[key] = mapping[obj[key]]
+        for item in obj.get('spans', ()):
+            if item.get('color') in mapping:
+                item['color'] = mapping[item['color']]
         material = obj.get('material', '')
         if material.startswith('list-paper-'):
             obj['fill'] = panel_color(theme, material, obj['paper_style'])
@@ -94,6 +100,9 @@ def draw(slide,p,theme):
                 for shape in shapes:
                     for paragraph in shape.text_frame.paragraphs:
                         paragraph.line_spacing=Pt(f.pitch)
+            if o.get('spans') and shapes:
+                from deck_sheet_type import apply_spans
+                apply_spans(shapes[0], o, theme)
             for i,s in enumerate(shapes):
                 s.name=f"art[{o['id']}]/{i}"
                 _turn(s, o)

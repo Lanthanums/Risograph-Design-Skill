@@ -32,19 +32,84 @@ def featured_quote(pages, reversed_pages):
     return -max(options)[-1] if options else None
 
 
+# Pages that enumerate parallel information. Their points sit on torn paper.
+LIST_FORMS = {'takeaway-list', 'concept-stack', 'keyword-band', 'contrast-pair', 'versus', 'before-after'}
+
+
 def collage_mode(meta, page, pool, enabled):
-    """Resolve the page's collage level from deck and page direction."""
+    """Resolve the page's collage level from deck and page direction.
+
+    Returns the level and whether the builder chose it. ``auto`` sets lists
+    and charts on paper. Other pages stay open, and a few of them may take
+    a paper scene beside their copy.
+    """
     direction = page.get('art_direction', {})
     setting = direction.get('collage', meta.get('collage', 'auto'))
-    if setting not in ('auto', 'rich', 'quiet', 'off'):
-        raise ValueError('collage must be auto, rich, quiet or off')
+    if setting not in ('auto', 'lists', 'rich', 'quiet', 'scene', 'off'):
+        raise ValueError('collage must be auto, lists, rich, quiet, scene or off')
     if not enabled or setting == 'off':
-        return None
-    if setting == 'auto':
-        quiet = (pool == [] or direction.get('paper_collage') == 'off'
-                 or direction.get('case_collage') == 'off')
-        return None if quiet else 'rich'
-    return setting
+        return None, False
+    if setting not in ('auto', 'lists'):
+        return setting, False
+    if (pool == [] or direction.get('paper_collage') == 'off' or direction.get('case_collage') == 'off'
+            or page.get('archetype') in ('quote', 'closing')):
+        return None, True
+    mains = [m for m in page.get('modules', []) if m.get('level') != 4]
+    forms = {m.get('visual') for m in mains}
+    listing = any(m.get('visual') in LIST_FORMS and len(m.get('visual_data', {}).get('items', [])) >= 2
+                  for m in mains)
+    if listing or forms & PRESS_FORMS:
+        return 'rich', True
+    return 'scene', True
+
+
+# A page title a little under the v4.5 size, with more room below its rule.
+TITLE_SCALE, TITLE_GAP = .82, 12
+
+
+def _title_lines(shapes):
+    """Ink boxes of the front title lines, top to bottom."""
+    lines = [tm.tight_rect(shape, mode='ink') for shape in shapes
+             if shape.name.startswith('art[title]') and 'riso-layer[back]' not in shape.name]
+    return sorted((list(line) for line in lines if line), key=lambda line: line[1])
+
+
+def _follow_title(slide, old, fresh):
+    """Keep an ornament that trails a title line at the end of the redrawn line.
+
+    The ornament shrinks with the title. One that would now meet another
+    mark, or leave the safe area, is lifted instead. Returns the shapes
+    moved and the shapes lifted, so a failed attempt can put both back.
+    """
+    from pptx.util import Pt
+
+    new = _title_lines([shape for shape in slide.shapes if shape._element in fresh])
+    moved, lifted = [], []
+    if not old or not new:
+        return moved, lifted
+    tree = slide.shapes._spTree
+    marks = [shape for shape in slide.shapes if shape.name.startswith(('el[', 'deck-mark['))]
+    for shape in marks:
+        if not shape.name.startswith('el['):
+            continue
+        rect = layout.obb(shape)
+        middle = (rect[1] + rect[3]) / 2
+        for index, line in enumerate(old):
+            if line[1] - 8 <= middle <= line[3] + 8 and line[2] - 14 <= rect[0] <= line[2] + 70:
+                target = new[min(index, len(new) - 1)]
+                moved.append((shape, shape.left, shape.top, shape.width, shape.height))
+                width, height = shape.width.pt * TITLE_SCALE, shape.height.pt * TITLE_SCALE
+                centre = (target[1] + target[3]) / 2 + (middle - (line[1] + line[3]) / 2) * TITLE_SCALE
+                shape.left = Pt(target[2] + (rect[0] - line[2]) * TITLE_SCALE)
+                shape.top = Pt(centre - height / 2)
+                shape.width, shape.height = Pt(width), Pt(height)
+                now = layout.obb(shape)
+                if now[2] > rk.SAFE[2] or any(layout.intersection(layout.inflate(now, 6), layout.obb(other))
+                                              for other in marks if other is not shape):
+                    lifted.append((tree.index(shape._element), shape._element))
+                    tree.remove(shape._element)
+                break
+    return moved, lifted
 
 
 def _clear_decor(slide, fresh, pieces):
@@ -81,7 +146,11 @@ def revise(slide, page, theme, number, total, meta, original, feature, previous,
     evidence = bool(modules) and writer.__name__ == 'p_infographic'
     if not (evidence or quote):
         collage = None
-    if not any((quote, chart, cards, inline_quote, collage)):
+    # ``collage: off`` keeps the whole v4.5 page, title included.
+    legacy = 'off' in (meta.get('collage', 'auto'), direction.get('collage'))
+    restyle = evidence and not legacy and 'title_size' not in direction
+    style = dict(_title_scale=TITLE_SCALE, _title_gap=TITLE_GAP, _rescue=True) if restyle else {}
+    if not any((quote, chart, cards, inline_quote, collage, restyle)):
         return {}
 
     local = copy(theme)
@@ -97,6 +166,7 @@ def revise(slide, page, theme, number, total, meta, original, feature, previous,
                 | set(check_slide(slide, number, archetype=arch)['fails']))
 
     original_check = failures()
+    old_title = _title_lines(original) if restyle else []
     tree = slide.shapes._spTree
     former = [(tree.index(shape._element), shape._element) for shape in original]
     insert_at = former[0][0] if former else len(tree)
@@ -105,14 +175,18 @@ def revise(slide, page, theme, number, total, meta, original, feature, previous,
     existing = {shape._element for shape in slide.shapes}
 
     def transaction(draw, papers=None):
-        removed = []
+        removed, moved = [], []
         try:
             result = draw()
             new = [shape._element for shape in slide.shapes if shape._element not in existing]
             for index, element in enumerate(new, insert_at):
                 tree.insert(index, element)
-            if papers is not None:
-                removed.extend(_clear_decor(slide, set(new), papers(result)))
+            if old_title:
+                shifted, lifted = _follow_title(slide, old_title, set(new))
+                moved.extend(shifted)
+                removed.extend(lifted)
+            if papers is not None or old_title:
+                removed.extend(_clear_decor(slide, set(new), papers(result) if papers is not None else []))
             new_failures = failures() - original_check
             if new_failures:
                 raise ValueError('; '.join(sorted(new_failures)))
@@ -124,6 +198,8 @@ def revise(slide, page, theme, number, total, meta, original, feature, previous,
                     tree.remove(shape._element)
             for index, element in removed:
                 tree.insert(index, element)
+            for shape, left, top, width, height in moved:
+                shape.left, shape.top, shape.width, shape.height = left, top, width, height
             return None
 
     errors = []
@@ -138,9 +214,10 @@ def revise(slide, page, theme, number, total, meta, original, feature, previous,
             classic_quote(slide, page, local)
             return 'classic'
 
-        actual = transaction(draw_classic) if number == feature else None
-        if actual is None and collage:
-            # Every other quotation is set on paper under a large mark.
+        # A mark planned around the first-pass layout gives way to the quotation.
+        actual = transaction(draw_classic, lambda _: []) if number == feature else None
+        if actual is None and collage and collage['mode'] in ('rich', 'quiet'):
+            # On request, a supporting quotation is set on paper under a large mark.
             from deck_quote import draw_paper
             made = {}
             for style in alternatives:
@@ -151,7 +228,8 @@ def revise(slide, page, theme, number, total, meta, original, feature, previous,
                             'colors': set(local.t.values())-set(theme.t.values())}
         if actual is None:
             for style in alternatives:
-                actual = transaction(lambda: draw(slide, page, local, [style], number, marked=True))
+                actual = transaction(lambda: draw(slide, page, local, [style], number, marked=True),
+                                     lambda _: [])
                 if actual:
                     break
         if actual:
@@ -168,7 +246,7 @@ def revise(slide, page, theme, number, total, meta, original, feature, previous,
             draw_mark(slide, local, rk.SAFE[0] + 3, rk.SAFE[1] + 2, 40)
         return {'quote': getattr(theme, 'previous_quote_layout', None), 'fallback': errors}
 
-    revised = dict(page, art_direction=dict(direction, _press_chart=chart, _cut_paper=cards,
+    revised = dict(page, art_direction=dict(direction, **style, _press_chart=chart, _cut_paper=cards,
                                            _inline_quote=inline_quote))
 
     def draw_evidence():
@@ -177,13 +255,16 @@ def revise(slide, page, theme, number, total, meta, original, feature, previous,
 
     if collage and evidence:
         # Richest first: reading faces, then papers beside open copy.
-        base = dict(direction, _press_chart=chart, _inline_quote=inline_quote,
+        base = dict(direction, **style, _press_chart=chart, _inline_quote=inline_quote,
                     _collage_seed=collage['seed'], _collage_variant=collage['variant'])
         # A spread composition first; a compact one keeps the page's quiet zone.
         steps = [dict(base, _collage=collage['mode']), dict(base, _collage=collage['mode'], _compact=True)]
         if chart:
             steps.append(dict(base, _collage=collage['mode'], _press_bands=True))
         steps.append(dict(base, _collage='under'))
+        if collage['mode'] == 'scene':
+            # The copy stays on the open page and a paper scene takes the opening.
+            steps = [dict(base, _collage='under')]
         def papers(made):
             pieces = made.get('collage', {}).get('pieces')
             if not pieces:
@@ -197,7 +278,7 @@ def revise(slide, page, theme, number, total, meta, original, feature, previous,
                 return {'plan': plan, 'collage': plan['collage'],
                         'colors': set(local.t.values())-set(theme.t.values()),
                         'fallback': errors if step is not steps[0] else None}
-        revised['art_direction'] = dict(direction, _press_chart=chart, _cut_paper=cards,
+        revised['art_direction'] = dict(direction, **style, _press_chart=chart, _cut_paper=cards,
                                         _inline_quote=inline_quote)
 
     plan = transaction(draw_evidence)
@@ -210,9 +291,12 @@ def revise(slide, page, theme, number, total, meta, original, feature, previous,
         revised['art_direction']['content_width'] = min(direction.get('content_width', 1), .62)
         plan = transaction(draw_evidence)
     if plan:
-        # Record why a requested collage gave way to the open page.
+        # Record why a requested collage gave way to the open page. A scene
+        # the builder offered on its own is simply left out.
+        optional = (collage and collage.get('automatic') and collage['mode'] in ('scene', 'rich') and not chart
+                    and not direction.get('image'))
         return {'plan': plan, 'colors': set(local.t.values())-set(theme.t.values()),
-                'fallback': errors or None}
+                'fallback': None if optional else errors or None}
     for index, element in former:
         tree.insert(index, element)
     if inline_quote:

@@ -31,7 +31,10 @@ def run(spec,out,render=False,mode='fast',autofit=True,verbose=False,plan_only=F
         result=timed(name,execute)
         log=(result.stdout or '')+(result.stderr or '');(out/(name+'.log')).write_text(log,encoding='utf-8')
         if verbose:print(log)
-        if result.returncode:raise RuntimeError(f'{name} failed ({result.returncode}):\n'+log.strip())
+        if result.returncode:
+            # Only the failing checks; the full log stays in its file.
+            failed=[line.strip() for line in log.splitlines() if '[FAIL]' in line] or log.strip().splitlines()[-12:]
+            raise RuntimeError(f'{name} failed ({result.returncode}): '+' | '.join(failed))
         return result
     environment=dict(python=sys.version.split()[0],platform=platform.platform(),packages={k:version(k) for k in ('python-pptx','Pillow','numpy')},sample_count=1,mode=mode,cold_warm='process cold; OS/font/LibreOffice cache state not controlled')
     try:
@@ -65,6 +68,15 @@ def run(spec,out,render=False,mode='fast',autofit=True,verbose=False,plan_only=F
         checked=json.loads((out/'qa.json').read_text(encoding='utf-8'))['poster_layout']
         timed('layout_check',lambda:write(out/'layout.json',dict(deck=deck.name,artifact='poster',pages=checked,**{'pass':bool(checked) and all(q['pass'] for q in checked)},provenance='same saved-PPTX checker result from qa; no duplicate traversal')))
         status.update(body_size=p['scale_ladder']['body'],hero_share=p['hero']['share'],archetype=p['archetype'],meaning=p['graphic_design']['meaning'],warnings=p.get('contract_warnings',[]),status='GEOMETRY_PASS',dialect=p['dialect'],recipe=p['graphic_design']['recipe'],fields=p['preflight']['fields'],words=p['content_words'],autofit=p['autofit']['changes'],voids=p['voids'])
+        if p.get('collage'):
+            # One line says how the sheet was set, so the plan need not be opened.
+            from poster_collage import summary
+            status.update(sheet=summary(p))
+            # Report only what the author can act on: a module that moved, a full sheet.
+            moves=[c for c in p['autofit']['changes'] if not c.startswith('Body ')]
+            floor=max(18,(p.get('constraints') or {}).get('body_min',18))
+            if p['scale_ladder']['body']<=floor:moves.append(f'body is at the {floor:g}pt floor; cut or merge a module for larger type')
+            if moves:status['adjusted']='; '.join(moves)
         if render:
             # PPTX hash includes source, geometry, font names, all native objects
             # and paper. Renderer environment/code participates in the cache key.
@@ -93,11 +105,11 @@ def run(spec,out,render=False,mode='fast',autofit=True,verbose=False,plan_only=F
             previous=json.loads(target.read_text(encoding='utf-8')) if target.exists() else {}
             if any(previous.get(k)!=template[k] for k in ('render_sha256','plan_sha256','pptx_sha256')):write(target,template)
             status['status']='RENDERED_QA_PASS'
-        status['next']='Inspect visual/contact.png and fill 9 scores plus 0–5 located weaknesses in visual/review.json; validate with poster_review --review.' if render else 'Inspect wireframe.png; run the same command with --render for final visual review.'
+        status['next']=('Look at the review image once: full sheet, 10% thumbnail and blur. Fill visual/review.json only when a review record is asked for.' if p.get('collage') else 'Inspect visual/contact.png and fill 9 scores plus 0–5 located weaknesses in visual/review.json; validate with poster_review --review.') if render else 'Inspect wireframe.png; run the same command with --render for final visual review.'
     except CapacityError as e:
         calibrated=preflight(s,diagnostic=e.report)
         write(out/'capacity-error.json',e.report);write(out/'preflight.json',calibrated);status.update(status='CAPACITY_FAILED',error=calibrated['estimated_capacity']+'; '+str(e),next='Read capacity-error.json for columns, tallest modules and repairs; source is unchanged.')
-    except Exception as e:status.update(status='FAILED',error=str(e),next='Read the named stage log; do not repeat rendering before geometry passes.')
+    except Exception as e:status.update(status='FAILED',error=str(e),next='Change the outline or spec as the error says, then run again.')
     finally:
         from run_manifest import fonts
         font_rows=fonts(p) if p else []
@@ -120,7 +132,7 @@ def run(spec,out,render=False,mode='fast',autofit=True,verbose=False,plan_only=F
 def cached_run(args):
     from input_cache import key,restore,store
     inputs=dict(spec=args.spec,plan=args.plan or args.content_plan)
-    options={k:v for k,v in vars(args).items() if k not in ('out','mode','verbose','spec','plan','content_plan')}
+    options={k:v for k,v in vars(args).items() if k not in ('out','mode','verbose','spec','plan','content_plan','outline')}
     cache,payload=key(inputs,options)
     if args.mode!='audit':
         result=restore(cache,args.out)
@@ -182,7 +194,7 @@ def variants(args):
     return int(any(r['exit_code'] for r in rows))
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--spec');ap.add_argument('--out');ap.add_argument('--render',action='store_true');ap.add_argument('--plan-only',action='store_true');ap.add_argument('--mode',choices=['fast','audit'],default='fast');ap.add_argument('--autofit',action=argparse.BooleanOptionalAction,default=True);ap.add_argument('--verbose',action='store_true');ap.add_argument('--describe-spec',action='store_true');ap.add_argument('--preflight',action='store_true');ap.add_argument('--auto',action='store_true');ap.add_argument('--draft',action='store_true');ap.add_argument('--variants',action='store_true');ap.add_argument('--system',action='store_true');ap.add_argument('--autodiscover',action='store_true');ap.add_argument('--kit');ap.add_argument('--node');ap.add_argument('--element-density',choices=['sparse','normal','rich']);ap.add_argument('--plan');ap.add_argument('--content-plan');ap.add_argument('--skip-plan',action='store_true');a=ap.parse_args()
+    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--spec');ap.add_argument('--out');ap.add_argument('--render',action='store_true');ap.add_argument('--plan-only',action='store_true');ap.add_argument('--mode',choices=['fast','audit'],default='fast');ap.add_argument('--autofit',action=argparse.BooleanOptionalAction,default=True);ap.add_argument('--verbose',action='store_true');ap.add_argument('--describe-spec',action='store_true');ap.add_argument('--preflight',action='store_true');ap.add_argument('--auto',action='store_true');ap.add_argument('--draft',action='store_true');ap.add_argument('--variants',action='store_true');ap.add_argument('--system',action='store_true');ap.add_argument('--autodiscover',action='store_true');ap.add_argument('--kit');ap.add_argument('--node');ap.add_argument('--element-density',choices=['sparse','normal','rich']);ap.add_argument('--plan');ap.add_argument('--outline');ap.add_argument('--content-plan');ap.add_argument('--skip-plan',action='store_true');a=ap.parse_args();notes=[]
     if a.auto and not a.draft:a.render=True
     if a.draft:a.plan_only=True
     if a.system and (a.kit or a.autodiscover):ap.error('--system is exclusive with --kit/--autodiscover')
@@ -190,7 +202,32 @@ def main():
     if a.describe_spec:
         from poster_flow import describe_spec
         print(json.dumps(describe_spec(),indent=2));return 0
-    if not a.spec and not a.plan:ap.error('--spec or --plan required')
+    if a.outline:
+        # The short format: expand it to a full plan beside the output.
+        if a.spec or a.plan:ap.error('choose --outline, --plan or --spec')
+        if not a.out:ap.error('--out directory required')
+        from poster_outline import compile_outline
+        target=Path(a.out).resolve();target.mkdir(parents=True,exist_ok=True)
+        started = time.perf_counter()
+        ok,notes=compile_outline(a.outline,target/'content-plan.json')
+        if not ok:
+            from render_cache import write as write_record
+            from run_manifest import engine_version
+            report = dict(status='FAILED', render='NOT_REQUESTED', visual_review='UNVERIFIED',
+                          error='\n'.join(line.removeprefix('error: ') for line in notes if line.startswith('error: ')))
+            elapsed = round(time.perf_counter() - started, 4)
+            parameters = dict(outline=str(Path(a.outline).resolve()), out=str(target), mode=a.mode, render=a.render)
+            write_record(target/'run-manifest.json', dict(
+                schema_version='1.1', artifact_hashes={}, engine_version=engine_version(), parameters=parameters,
+                stages={'outline': dict(exit_code=1, seconds=elapsed)}, engine_seconds=elapsed, exit_code=1,
+                status=report['status']))
+            write_record(target/'run.json', report)
+            write_record(target/'summary.json', dict(report, engine_seconds=elapsed))
+            write_record(target/'timings.json', dict(seconds={'outline': elapsed, 'total': elapsed}))
+            print('status: FAILED\n'+'\n'.join(n for n in notes if not n.startswith('outline:')))
+            return 1
+        a.plan=str(target/'content-plan.json')
+    if not a.spec and not a.plan:ap.error('--outline, --plan or --spec required')
     if a.spec and a.plan:ap.error('choose --spec or --plan')
     if a.plan and (a.preflight or a.variants):
         from content_plan import to_spec
@@ -211,7 +248,20 @@ def main():
     if not a.out:ap.error('--out directory required')
     if a.variants:return variants(a)
     result=cached_run(a)
-    for k in ('status','cache','body_size','hero_share','dialect','archetype','recipe','meaning','warnings','fields','words','render','visual_review','error','next'):
+    # A print collage reports in a few lines; the files hold the detail.
+    saved=Path(a.out)/'run.json'
+    if 'sheet' not in result and saved.is_file():
+        # A cache restore returns only its status: read the report it restored.
+        previous=json.loads(saved.read_text(encoding='utf-8'))
+        result.update({k:previous[k] for k in ('sheet','adjusted','next') if k in previous and k not in result})
+    lean='sheet' in result or bool(a.outline)
+    keys=('status','cache','sheet','adjusted','error') if lean and not a.verbose else ('status','cache','body_size','hero_share','dialect','archetype','recipe','meaning','sheet','adjusted','warnings','fields','words','render','visual_review','error')
+    for k in keys:
         if k in result:print(k+': '+str(result[k]))
-    print('evidence: '+str(Path(a.out).resolve()));return 1 if result['status'] in ('FAILED','CAPACITY_FAILED') else 0
+    if lean and not a.verbose and result.get('warnings'):print('warnings: '+'; '.join(map(str,result['warnings'])))
+    for line in notes:print(line)
+    if (Path(a.out)/'visual/contact.png').is_file() and result['status']=='RENDERED_QA_PASS':print('review: '+str(Path(a.out).resolve()/'visual/contact.png'))
+    if 'next' in result:print('next: '+str(result['next']))
+    if not lean or a.verbose:print('evidence: '+str(Path(a.out).resolve()))
+    return 1 if result['status'] in ('FAILED','CAPACITY_FAILED') else 0
 if __name__=='__main__':sys.exit(main())

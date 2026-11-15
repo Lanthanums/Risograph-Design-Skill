@@ -57,16 +57,21 @@ standalone quotation in the deck. Decide which quotation carries the argument
 and set `quote_priority: featured` on that page. Use `supporting` for a page that
 should never receive the automatic classic treatment. An explicit `classic`
 request is a nomination for the same single slot. Leave the slot unused when
-the source or rhythm calls for a quieter treatment. Every other quotation is
-set on a torn sheet with a large opening quotation mark hanging across its top
-edge and the credit on a small taped slip. `broadside` centres a short
-excerpt, `margin` sets the sheet to the right, and `folio` gives a long
-excerpt a wide sheet. Keep a visible opening quotation mark in every layout,
+the source or rhythm calls for a quieter treatment. The featured quotation
+is printed on a flooded ink field with a dot screen. Every other quotation
+sits on the open page under a large opening quotation mark, with overprinted
+circles at the foot. `broadside` centres a short excerpt, `margin` gives a
+medium excerpt a credit rail, and `folio` gives a long excerpt a wide sheet.
+Set `collage: rich` on a quotation page to print it on torn paper with the
+credit on a taped slip. Keep a visible opening quotation mark in every layout,
 including an inline pull quote, and keep source words and credits exact.
 The fitter can choose another layout when the copy or credit needs more room.
 `vertical_align` accepts top, balanced (default), center or bottom within measured
 remaining space. `title_rule: false` removes the title underline. Body/title sizes
 and columns can also be overridden per page. Source content and ledger stay bound.
+A page title is set at about four fifths of the v4.5 size, near 36 pt, with
+more room between its rule and the content. An explicit `title_size` on a
+page is used as written.
 Use `content_width` from `.45` to `1` to set the evidence band's share of the
 safe width. A narrower left-aligned band can group chart labels and leave a
 continuous margin for a quiet field. Keep a wide band when comparison labels
@@ -99,14 +104,14 @@ clipping needs the height.
 
 ## Collage on content pages
 
-Content pages are set on torn paper by default: a dominant field, reading
-faces under the copy, and a small paper scene in a large opening. Read
+Torn paper is the container for pages that list information: points,
+comparisons and charts. Statements, cases, figures and sequences take turns
+between copy on a sheet and open copy with a paper scene. A supplied
+`image` is printed in the deck inks and takes the scene's place. Read
 [deck paper collage](deck-paper-collage.md) for the page families and the
-review list. Set `collage: quiet` on a dense page or a deliberate pause, and
-`collage: off` for the open v4.5 page. `meta.collage` sets the deck default.
-A sparse statement or case page keeps its copy to a reading measure and lets
-the paper scene carry the rest of the page. Plan which pages are rich and
-which are quiet in the storyboard, so the deck has a rhythm.
+type inside a sheet. Set `collage: rich` to put another page on paper,
+`collage: scene` to ask for a scene, and `collage: off` for the v4.5 page.
+`meta.collage` sets the deck default.
 
 Use explicit module `page` assignments to compose arguments. Parallel members of
 one semantic group may share a row; `keep_together: true` preserves a column lock.
@@ -164,8 +169,9 @@ emphasis slides rather than filling every page mechanically.
 ## Print treatments
 
 Treat the v4.5 shared print system as the compatibility baseline. When tuning a
-page family, keep the existing cover, section divider, classic quotation, paper
-backgrounds, overprint pairings, dot fields and deck-wide mark density. Limit
+page family, keep the existing cover, section divider, paper backgrounds, overprint
+pairings, dot fields and deck-wide mark density. Quotation pages take their
+own fields of colour. Limit
 new geometry to the requested page families. The builder draws each page as
 v4.5 first and then redraws the content of collage pages, which keeps the
 locked pages identical from release to release. For maintenance, render the same English

@@ -485,7 +485,8 @@ def structural(rep, deck, media, spec, args):
         budget_checks(rep, slide, i, args)
         evidence_page=next((r['plan'] for r in args.style.get('evidence_pages',[]) if r['page']==i),None)
         if evidence_page:
-            from chart_qa import check as check_chart
+            if canvas.artifact=='deck':from deck_chart_qa import check as check_chart
+            else:from chart_qa import check as check_chart
             result=check_chart(slide,evidence_page)
             rep.add(result['ok'],'source chart provenance / zero baseline','; '.join(result['errors']) or f"{result['checks']} points verified",i)
         if canvas.artifact=='poster':
@@ -629,17 +630,11 @@ def pixel_checks(rep, deck, media, render, args):
                 cell = bg_mask[cy0:cy1, cx0:cx1]
                 if cell.size == 0:
                     continue
-                if collage_page:
-                    # Copy on a collage page sits on a paper face. Compare the
-                    # plate with that face, so a clean sheet reads as clean
-                    # and a dot screen under copy still fails.
-                    # A faint ruling is not a dot field, and turned copy keeps
-                    # a few points of tolerance at the edge of its box.
-                    trim = int(3 * px)
-                    if cx1 - cx0 <= 4 * trim or cy1 - cy0 <= 3 * trim:
+                if collage_page and canvas.artifact == 'deck':
+                    from deck_qa import sheet_cell
+                    cell = sheet_cell(bg, (cx0, cy0, cx1, cy1), px)
+                    if cell is None:
                         continue
-                    cell = mt.ink_mask(bg.crop((cx0 + trim, cy0 + trim, cx1 - trim, cy1 - trim)),
-                                       threshold=64)
                 frac_cell = float(cell.mean())
                 if frac_cell > worst:
                     worst = frac_cell

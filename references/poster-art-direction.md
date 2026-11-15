@@ -1,5 +1,8 @@
 # Composition controls and measured fitting
 
+These controls set editorial posters and `print: flat`. The default infographic
+sheet is described in [print collage](poster-print-collage.md).
+
 Query poster_run.py --describe-spec for authoritative types, domains, units and nesting.
 Poster controls live in art_direction; recipe/seed in meta. meta.dialect A–F is
 the legacy element vocabulary, distinct from art_direction.dialect.

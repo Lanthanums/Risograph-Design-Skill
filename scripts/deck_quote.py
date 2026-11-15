@@ -63,9 +63,10 @@ def draw_mark(slide, theme, x, y, size, centered=False, color=None, box=72):
                    color=color or (theme.display_ink if theme.on_red else theme.inkA))[0]
 
 
-def _draw(slide, theme, layout, measured, marked=False):
+def _draw(slide, theme, layout, measured, marked=False, lift=0):
     quote, width, credits, credit_width, support = measured
     left, top, right, bottom = rk.SAFE
+    bottom -= lift
     accent = theme.paper if theme.on_red else theme.inkA
     align = 'c' if layout == 'broadside' else 'l'
     color = theme.front_ink
@@ -119,7 +120,8 @@ def draw(slide, page, theme, layouts, number, marked=False):
         start = len(slide.shapes)
         try:
             measured = _measure(page, theme, layout, marked)
-            _draw(slide, theme, layout, measured, marked)
+            # Overprinted circles hold the foot of the page, so the words sit higher.
+            _draw(slide, theme, layout, measured, marked, 70 if page.get('_quote_field') == 'bloom' else 0)
             report = check_slide(slide, number, archetype='quote')
             if any(f.startswith('largest quiet rectangle') for f in report['fails']):
                 raise ValueError(f'{layout} leaves too little quiet space around the quotation')

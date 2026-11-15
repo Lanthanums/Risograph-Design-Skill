@@ -118,6 +118,9 @@ def check_slide(slide,idx,canvas,p):
         for zi,s in enumerate(shapes):
             bid=object_id(s)
             if bid==aid or s.name=='riso-paper[background]' or (s.has_text_frame and s.text_frame.text.strip()):continue
+            # The paper plate lies under all copy; each text object records the
+            # stock it sits on and the rendered check reads the real pixels.
+            if by.get(bid,{}).get('kind')=='plate':continue
             if not lay.intersection(t['rect'],lay.obb(s)):continue
             if regional and by.get(bid,{}).get('kind')=='path' and not by[bid].get('fill'):
                 from poster_primitives import stroke_segments
@@ -168,7 +171,7 @@ def check_slide(slide,idx,canvas,p):
         if not p.get('graphic_design',{}).get('recipe') and max((o['fit']['size'] for o in by.values() if o['kind']=='text' and o['role']=='hook'),default=0)<48:warns.append('Flat composition: typography hero below 48pt and no graphic; revise hierarchy')
         if len(p.get('micro_layer',[]))<3:warns.append('Flat composition: material layers missing')
     rects=[t['rect'] for t in texts]
-    visible=[o for o in by.values() if o['kind']!='text']
+    visible=[o for o in by.values() if o['kind'] not in ('text','plate')]
     rects.extend(o['rect'] for o in visible if o['kind']!='halftone')
     components=whitespace(rects,canvas)
     sizes=[o['fit']['size'] for o in by.values() if o['kind']=='text']

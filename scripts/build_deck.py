@@ -403,7 +403,9 @@ def p_quote(s, spec, th, idx, total, meta):
 def p_editorial_quote(slide, page, theme):
     """Measure a pull quote and its attribution as one vertical composition."""
     left, top, right, bottom = SAFE
-    x = left + 54
+    field = page.get('_quote_field')
+    # On a flooded field the dot screen climbs the left edge, so the words move right of it.
+    x = left + (92 if field == 'flood' else 54)
     width = min(right - x - 8, 720)
     details = []
     for role, value, size in (
@@ -434,6 +436,9 @@ def p_editorial_quote(slide, page, theme):
                 quote = replace(quote, lines=(*quote.lines[:-2], previous[0], tail))
     group_height = header_height + quote.height + support_height
     y = top + (bottom - top - group_height) * .42
+    if field:
+        # The words ride higher: circles or the densest dots hold the foot of the page.
+        y = top + max(0, bottom - top - group_height - (72 if field == 'bloom' else 30)) * .34
     accent = theme.display_ink if theme.on_red else theme.inkA
     mark_shape = tf.draw(slide, x, y, 100, mark, theme, role='quote-mark', color=accent)[0]
     if page.get('art_direction', {}).get('quote_screen', True):
@@ -720,6 +725,15 @@ def p_infographic(slide, spec, th, idx, total, meta):
     if body_size > 18:
         attempts.append(('off', 'single', 18))
     attempts = [dict(_paper_mode=mode, paper_layout=layout, body_size=size) for mode, layout, size in attempts]
+    if direction.get('_rescue'):
+        # Before giving up on the copy, set the page title smaller.
+        attempts += [dict(_paper_mode='off', paper_layout='single', body_size=18,
+                          title_size=round(direction['title_size'] * scale)) for scale in (.86, .74)]
+        if direction.get('list_layout', 'auto') == 'auto' and any(
+                m.get('visual') == 'takeaway-list' for m in modules):
+            # A long list reads as two columns before any copy is refused.
+            attempts += [dict(_paper_mode='off', paper_layout='single', body_size=18, list_layout='columns',
+                              title_size=round(direction['title_size'] * scale)) for scale in (1, .86)]
     if direction.get('_collage') in ('rich', 'quiet'):
         # Paper needs room. Give it back in this order: body size, tighter
         # insets, one sheet instead of cards, then a smaller title.
@@ -727,8 +741,10 @@ def p_infographic(slide, spec, th, idx, total, meta):
         layouts = [paper_layout] + (['single'] if lists and paper_layout != 'single' else [])
         title = direction['title_size']
         sizes = [body_size] + ([18] if body_size > 18 else [])
+        # A compact title has less to give back than a v4.5 title.
+        scales = (1, .9) if direction.get('_title_scale') else (1, .86, .74)
         attempts = [dict(_paper_mode='off', paper_layout=layout, body_size=size, _tight=tight, title_size=scale)
-                    for scale in (title, round(title * .86), round(title * .74))
+                    for scale in [round(title * s) for s in scales]
                     for layout in layouts
                     for size, tight in [(s, False) for s in sizes] + [(18, True)]]
     for index, attempt in enumerate(attempts):
@@ -789,11 +805,17 @@ def draw_content(slide, page, theme, number, total, meta, writer, storyboard):
         writer(slide, page, theme, number, total, meta)
     except ValueError:
         from deck_press_chart import PRESS_FORMS
-        if not storyboard or theme.lang != 'en' or writer is not p_infographic or not any(
-                module.get('visual') in PRESS_FORMS for module in page.get('modules', [])):
+        if not storyboard or theme.lang != 'en' or writer is not p_infographic:
             raise
-        press = dict(page, art_direction=dict(page.get('art_direction', {}), _press_chart=True))
-        writer(slide, press, theme, number, total, meta)
+        direction = page.get('art_direction', {})
+        if any(module.get('visual') in PRESS_FORMS for module in page.get('modules', [])):
+            try:
+                writer(slide, dict(page, art_direction=dict(direction, _press_chart=True)), theme, number, total, meta)
+                return
+            except ValueError:
+                pass
+        # Last resort for a page v4.5 refused: a smaller title, then a list in two columns.
+        writer(slide, dict(page, art_direction=dict(direction, _rescue=True)), theme, number, total, meta)
 
 
 def write_style(out_path, spec, theme, manifest, extra=None):
@@ -878,8 +900,13 @@ def build(spec, out_path, base_dir=None):
         ctx=mt.Ctx(PAGE_W,PAGE_H,2,colors)
         records=[]
         import hashlib
+        from deck_print import feature_quote_field
+        fields = [page_field(spec, page, i, th.lang == 'en') for i, page in enumerate(spec.get('pages', []), 1)]
+        if (spec.get('storyboard') and th.lang == 'en' and meta.get('elements', True)
+                and meta.get('collage', 'auto') != 'off'):
+            feature_quote_field(spec, fields)
         for i,page in enumerate(spec.get('pages',[]),1):
-            field = page_field(spec, page, i, th.lang == 'en')
+            field = fields[i - 1]
             reverse = field['reverse']
             bg, treatment = mt.render_page(ctx, field, meta.get('seed', 1), i)
             bg_path=media/f'bg{i}.jpg';mt.save_img(bg,str(bg_path),'jpg',70)
@@ -925,6 +952,16 @@ def build(spec, out_path, base_dir=None):
     chrome_ink = rk.chrome_area(chrome_items)
 
     pages = spec.get("pages", [])
+    for page in pages:
+        # A supplied picture is checked once, before any page is drawn.
+        if page.get('art_direction', {}).get('image'):
+            if page.get('archetype') in ('cover', 'divider') or not page.get('modules'):
+                raise ValueError(f"{page.get('id', 'page')}: image belongs on a content page")
+            from deck_picture import resolve
+            try:
+                page['art_direction']['image'] = resolve(page['art_direction']['image'], base_dir)
+            except ValueError as exc:
+                raise ValueError(f"{page.get('id', 'page')}: {exc}") from exc
     total = meta.get("total", len(pages))
     prs = new_deck()
     deck_records = []
@@ -937,6 +974,8 @@ def build(spec, out_path, base_dir=None):
     rendered_quotes = []
     cutaway_pages = []
     collage_pages = []
+    scene_pages = []
+    open_turns = 0
     refinement_colors = set()
     refinement_fallbacks = []
     from deck_print import chrome_foreground
@@ -1079,11 +1118,23 @@ def build(spec, out_path, base_dir=None):
                 impression_records.append(dict(mark, page=i))
         if th.lang == 'en' and (th.deck_editorial or page.get('editorial')):
             from deck_refinements import collage_mode
-            mode = collage_mode(meta, page, pool, want_elements and th.deck_editorial)
+            mode, automatic = collage_mode(meta, page, pool, want_elements and th.deck_editorial)
+            if direction.get('image') and mode is None and want_elements and th.deck_editorial:
+                # A picture needs the collage plate even on a page that would stay open.
+                mode, automatic = 'scene', False
+            if mode == 'scene' and automatic and arch not in ('cover', 'divider'):
+                if meta.get('collage', 'auto') == 'lists':
+                    # Paper only where information is listed; scenes are occasional.
+                    if len(scene_pages) >= max(1, total // 5) or (collage_pages and collage_pages[-1] == i - 1):
+                        mode = None
+                else:
+                    # Pages that do not list take turns: copy on a sheet, then open copy with a scene.
+                    mode = 'rich' if open_turns % 2 == 0 else 'scene'
+                    open_turns += 1
             result = revise(slide, page, th, i, total, meta, original_content, feature,
                             rendered_quotes[-1]['layout'] if rendered_quotes else None,
                             (writer, p_editorial_quote), media,
-                            collage=dict(mode=mode, seed=meta.get('seed', 1) * 131 + i,
+                            collage=dict(mode=mode, automatic=automatic, seed=meta.get('seed', 1) * 131 + i,
                                          variant=meta.get('seed', 1) + len(collage_pages)) if mode else None)
             if result.get('collage'):
                 from deck_plate import bake
@@ -1091,6 +1142,8 @@ def build(spec, out_path, base_dir=None):
                      [r['rect'] for r in tm.audit(slide)] if treatment != 'paper' else (),
                      manifest, on_red, (PAGE_W, PAGE_H))
                 collage_pages.append(i)
+                if mode == 'scene':
+                    scene_pages.append(i)
                 collage_records.extend(dict(piece, page=i, purpose='collage')
                                        for piece in result['collage']['pieces'])
             refinement_colors.update(result.get('colors', ()))
@@ -1107,8 +1160,10 @@ def build(spec, out_path, base_dir=None):
                                        for metric in new_plan['module_metrics']
                                        for panel in metric.get('paper_panels', []))
             cutaway_mode = direction.get('case_collage', 'auto')
+            # Paper scenes replace the small native cutaway unless collage is off.
+            legacy = 'off' in (meta.get('collage', 'auto'), direction.get('collage'))
             if (not result.get('collage') and want_elements and pool != [] and (cutaway_mode == 'on' or
-                    (len(cutaway_pages) < 2 and (not cutaway_pages or cutaway_pages[-1] < i-1)))):
+                    (legacy and len(cutaway_pages) < 2 and (not cutaway_pages or cutaway_pages[-1] < i-1)))):
                 cutaway = sparse_cutaway(slide, page, th, meta.get('seed', 1)*131+i)
                 if cutaway:
                     from deck_paper_collage import panel_color

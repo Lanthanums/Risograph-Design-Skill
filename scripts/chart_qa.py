@@ -2,10 +2,27 @@
 import math,re
 from source_profile import quantity,validate_module
 
+
+def unit_visible(text, unit):
+    normalized = re.sub(r'\s+', ' ', text).replace('％', '%')
+    unit = unit.replace('％', '%')
+    if unit == '%':
+        return '%' in normalized
+    return bool(re.search(r'(?<!\w)' + re.escape(unit) + r'(?!\w)', normalized, re.IGNORECASE))
+
 def check(slide,plan):
     errors=[];checks=0;profile=plan.get('evidence',{}).get('profile',{})
-    if not profile or plan.get('evidence',{}).get('legacy'):return dict(ok=True,checks=0,errors=[],status='LEGACY_UNVERIFIED')
     by={s.name:s for s in slide.shapes}
+    for obj in plan['objects']:
+        unit = obj.get('chart_unit')
+        if unit:
+            checks += 1
+            prefix = 'art[' + obj['id'] + ']'
+            if not any(name.startswith(prefix) and shape.has_text_frame and unit_visible(shape.text, unit)
+                       for name, shape in by.items()):
+                errors.append(f"{obj['id']}: saved chart text is missing unit {unit!r}")
+    if not profile or plan.get('evidence',{}).get('legacy'):
+        return dict(ok=not errors,checks=checks,errors=errors,status='LEGACY_UNVERIFIED')
     for m in plan.get('source_modules',[]):
         es,_=validate_module(m,profile);errors+=es
     points=[o for o in plan['objects'] if o.get('data_point')]

@@ -59,11 +59,18 @@ def render_cards(plan, items, region, body, module, val, order, cut_paper=False)
     return max(card['rect'][3] for card in cards), cards
 
 
-def render_items(items, x, y, width, body, ink, mid, val, path, order, layout):
-    gutter = 35 if order == 'ordered' else 22
+def render_items(items, x, y, width, body, ink, mid, val, path, order, layout, lead_ins=False, first=0):
+    if layout == 'columns' and len(items) >= 4 and width >= 610:
+        # A long list reads as two columns: down the left, then down the right.
+        half, gap = (len(items) + 1) // 2, 30
+        column = (width - gap) / 2
+        return max(render_items(group, x + side * (column + gap), y, column, body, ink, mid, val, path, order,
+                                'stack', lead_ins, side * half)
+                   for side, group in enumerate((items[:half], items[half:])))
+    gutter = (44 if lead_ins else 35) if order == 'ordered' else 22
     # Keep text at a usable measure on wide slides; narrow columns already
     # control the measure.
-    measure = min(width - gutter, body * 31)
+    measure = min(width - gutter, body * 31, 540 if lead_ins else width)
     xx = x + gutter
     long_details = sum(len(item.get('text') or '') >= 45 for item in items)
     paired = width >= 610 and (layout == 'side-by-side' or
@@ -71,15 +78,23 @@ def render_items(items, x, y, width, body, ink, mid, val, path, order, layout):
     cue_width = min(195, body * 9)
     detail_x = xx + cue_width + 18
     detail_width = min(width - (detail_x - x), body * 28)
-    for j, item in enumerate(items):
+    for j, item in enumerate(items, first):
         start = y
         prefix = f'visual_data.items.{j}'
         detail = item.get('text')
         size = body + (2 if paired else min(5, body * .22)) if detail else body
+        from deck_sheet_type import lead_in, span
+        lead = lead_in(item['label']) if lead_ins and not detail else 0
         if order == 'ordered':
-            val(f'nav-{j}', f'{j + 1:02d}', x, start + 1, gutter - 5, 13, True, 'navigation')
+            numeral = 17 if lead_ins else 13
+            val(f'nav-{j}', f'{j + 1:02d}', x, start + (0 if lead_ins else 1), gutter - 5, numeral, True,
+                'navigation')
         label = val(prefix + '.label', item['label'], xx, y,
-                    cue_width if paired and detail else measure, size, bool(detail), tidy_rag=True)
+                    cue_width if paired and detail else measure, size, bool(detail) or bool(lead),
+                    tidy_rag=True)
+        if lead:
+            # The cue before the colon speaks in the heading voice; the rest stays body copy.
+            span(label, lead, len(' '.join(label['fit']['lines'])), bold=False, color=ink['body'])
         center = start + size * .53
         if order != 'ordered':
             mark = path(f'{mid}-list-mark-{j}', [[[x + 1, center], [x + 8, center]]],
@@ -93,8 +108,48 @@ def render_items(items, x, y, width, body, ink, mid, val, path, order, layout):
             y = max(y, detail_fit['rect'][3])
         # Gaps between points are wider than the cue/detail gap. Break rules
         # are omitted, so the row group is defined by type and proximity.
-        y += min(17, body * .60) if j < len(items) - 1 else 8
+        y += min(17, body * .60) if j < first + len(items) - 1 else 8
     return y
+
+
+def use_columns(items, width, paper_layout):
+    """Five to eight points with a cue and a detail read as two sheets side by side."""
+    return (width >= 680 and 5 <= len(items) <= 8 and paper_layout != 'single'
+            and all(item.get('text') for item in items))
+
+
+def render_collage_columns(plan, items, region, body, module, val, order):
+    """Split a long list over two sheets. The second hangs a little lower."""
+    left, top, width = region
+    first = (len(items) + 1) // 2
+    groups = ((0, items[:first], (.0, .485), 0), (first, items[first:], (.515, .985), 20))
+    sheets = []
+    for offset, group, (a, b), drop in groups:
+        x, right = left + width * a, left + width * b
+        y = top + drop
+        start = len(plan['objects'])
+        text_x = x + (58 if order == 'ordered' else 22)
+        text_width = right - text_x - 20
+        cursor = y + 16
+        for local, item in enumerate(group):
+            index = offset + local
+            row = f'visual_data.items.{index}'
+            if order == 'ordered':
+                val(f'nav-{index}', f'{index + 1:02d}', x + 17, cursor + 3, 34, 15, True, 'navigation')
+            cue = val(row + '.label', item['label'], text_x, cursor, text_width, body + 2, True, tidy_rag=True)
+            detail = val(row + '.text', item['text'], text_x, cue['rect'][3] + 2, text_width, tidy_rag=True)
+            cursor = detail['rect'][3] + min(15, body * .7)
+        members = plan['objects'][start:]
+        bottom = max(ob['rect'][3] for ob in members) + 17
+        face = dict(id=f'{module}-sheet-{len(sheets) + 1}', kind='paper', role='surface', layer='surface',
+                    material='collage-face', family='card', rect=[x, y, right, bottom],
+                    members=[ob['id'] for ob in members], rotation=0, ruled=True)
+        for ob in members:
+            ob['on_face'] = face['id']
+        plan['objects'].insert(start, face)
+        sheets.append(dict(module=module, face=face['id'], rect=face['rect'], members=face['members'],
+                           style='collage'))
+    return max(sheet['rect'][3] for sheet in sheets), sheets
 
 
 def render_collage_cards(plan, items, region, body, module, val, order, loosen=0):

@@ -452,6 +452,15 @@ The schema is a valid synthetic example, not supplied factual copy. Replace ever
       "art_direction": {
         "type": "object",
         "properties": {
+          "ornament": {
+            "type": "string",
+            "default": "classic",
+            "level": "art_direction",
+            "enum": [
+              "focused",
+              "classic"
+            ]
+          },
           "element_density": {
             "type": "string",
             "default": "normal",
@@ -506,6 +515,74 @@ The schema is a valid synthetic example, not supplied factual copy. Replace ever
               "plum-ochre",
               "teal-coral"
             ]
+          },
+          "print": {
+            "type": "string",
+            "default": "collage",
+            "scope": "infographic posters; collage sets torn paper, spot-ink fields and print furniture, flat is the plain sheet without paper, ink fields or masthead",
+            "level": "art_direction",
+            "enum": [
+              "collage",
+              "flat"
+            ]
+          },
+          "scene": {
+            "type": "string",
+            "default": "auto",
+            "scope": "print collage: the paper scene beside the title",
+            "level": "art_direction",
+            "enum": [
+              "auto",
+              "off",
+              "moon",
+              "stack",
+              "press",
+              "horizon"
+            ]
+          },
+          "paper": {
+            "type": "string",
+            "default": "auto",
+            "scope": "print collage: none keeps every module off paper",
+            "level": "art_direction",
+            "enum": [
+              "auto",
+              "none"
+            ]
+          },
+          "masthead": {
+            "type": "string",
+            "default": "auto",
+            "scope": "print collage: title on open paper, or reversed out of a torn ink band",
+            "level": "art_direction",
+            "enum": [
+              "auto",
+              "open",
+              "band"
+            ]
+          },
+          "keep_order": {
+            "type": "boolean",
+            "default": false,
+            "scope": "print collage: true stops a column module moving up beside a lone neighbour",
+            "level": "art_direction"
+          },
+          "display": {
+            "type": "string",
+            "default": "serif",
+            "scope": "print collage: display and heading face",
+            "level": "art_direction",
+            "enum": [
+              "serif",
+              "grotesque"
+            ]
+          },
+          "collage_variant": {
+            "type": "integer",
+            "minimum": 0,
+            "default": "meta.seed",
+            "scope": "print collage: another arrangement of the same papers",
+            "level": "art_direction"
           },
           "skeleton": {
             "type": "string",
@@ -566,9 +643,9 @@ The schema is a valid synthetic example, not supplied factual copy. Replace ever
           "title_size": {
             "type": "number",
             "minimum": 40,
-            "maximum": 80,
+            "maximum": 200,
             "unit": "pt",
-            "default": 64,
+            "default": "64; print collage fits the largest size the masthead holds",
             "level": "art_direction"
           },
           "title_leading": {
@@ -1163,6 +1240,15 @@ The schema is a valid synthetic example, not supplied factual copy. Replace ever
     "additionalProperties": false
   },
   "art_direction": {
+    "ornament": {
+      "type": "enum",
+      "values": [
+        "focused",
+        "classic"
+      ],
+      "default": "classic",
+      "level": "art_direction"
+    },
     "element_density": {
       "type": "enum",
       "values": [
@@ -1216,6 +1302,74 @@ The schema is a valid synthetic example, not supplied factual copy. Replace ever
         "teal-coral"
       ],
       "default": "cobalt-vermilion",
+      "level": "art_direction"
+    },
+    "print": {
+      "type": "enum",
+      "values": [
+        "collage",
+        "flat"
+      ],
+      "default": "collage",
+      "scope": "infographic posters; collage sets torn paper, spot-ink fields and print furniture, flat is the plain sheet without paper, ink fields or masthead",
+      "level": "art_direction"
+    },
+    "scene": {
+      "type": "enum",
+      "values": [
+        "auto",
+        "off",
+        "moon",
+        "stack",
+        "press",
+        "horizon"
+      ],
+      "default": "auto",
+      "scope": "print collage: the paper scene beside the title",
+      "level": "art_direction"
+    },
+    "paper": {
+      "type": "enum",
+      "values": [
+        "auto",
+        "none"
+      ],
+      "default": "auto",
+      "scope": "print collage: none keeps every module off paper",
+      "level": "art_direction"
+    },
+    "masthead": {
+      "type": "enum",
+      "values": [
+        "auto",
+        "open",
+        "band"
+      ],
+      "default": "auto",
+      "scope": "print collage: title on open paper, or reversed out of a torn ink band",
+      "level": "art_direction"
+    },
+    "keep_order": {
+      "type": "boolean",
+      "default": false,
+      "scope": "print collage: true stops a column module moving up beside a lone neighbour",
+      "level": "art_direction"
+    },
+    "display": {
+      "type": "enum",
+      "values": [
+        "serif",
+        "grotesque"
+      ],
+      "default": "serif",
+      "scope": "print collage: display and heading face",
+      "level": "art_direction"
+    },
+    "collage_variant": {
+      "type": "integer",
+      "minimum": 0,
+      "default": "meta.seed",
+      "scope": "print collage: another arrangement of the same papers",
       "level": "art_direction"
     },
     "skeleton": {
@@ -1277,9 +1431,9 @@ The schema is a valid synthetic example, not supplied factual copy. Replace ever
     "title_size": {
       "type": "number",
       "minimum": 40,
-      "maximum": 80,
+      "maximum": 200,
       "unit": "pt",
-      "default": 64,
+      "default": "64; print collage fits the largest size the masthead holds",
       "level": "art_direction"
     },
     "title_leading": {
