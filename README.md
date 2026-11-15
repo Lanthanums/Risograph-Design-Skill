@@ -4,19 +4,19 @@ Create editable English PowerPoint decks and standalone posters with torn paper,
 
 [Download v5.0](https://github.com/Lanthanums/Risograph-Design-Skill/releases/download/v5.0/riso-slides-v5.0.zip) · [Release notes](https://github.com/Lanthanums/Risograph-Design-Skill/releases/tag/v5.0) · [中文说明](README_zh.md)
 
-[![The Night Line, six purple-and-orange PowerPoint pages with quotations, statistics, a case study and a three-step vote](https://github.com/Lanthanums/Risograph-Design-Skill/releases/download/v5.0/night-line-slides.png)](https://github.com/Lanthanums/Risograph-Design-Skill/releases/download/v5.0/night-line-slides.png)
+[![The Night Line, six purple-and-orange PowerPoint pages with quotations, statistics, a case study and a three-step vote](https://raw.githubusercontent.com/Lanthanums/Risograph-Design-Skill/v5.0/.github/gallery/night-line-slides.png)](https://raw.githubusercontent.com/Lanthanums/Risograph-Design-Skill/v5.0/.github/gallery/night-line-slides.png)
 
 *The Night Line* uses open paper for quotations and figures, newsprint for a rider case, and a torn sheet for the three steps to a vote. The typography and paper change with each page’s job.
 
 ## Slide gallery
 
-[![The Seed Shelf, six teal-and-coral PowerPoint pages with torn cards, a pictogram statistic, quotations and a timeline](https://github.com/Lanthanums/Risograph-Design-Skill/releases/download/v5.0/seed-shelf-slides.png)](https://github.com/Lanthanums/Risograph-Design-Skill/releases/download/v5.0/seed-shelf-slides.png)
+[![The Seed Shelf, six teal-and-coral PowerPoint pages with torn cards, a pictogram statistic, quotations and a timeline](https://raw.githubusercontent.com/Lanthanums/Risograph-Design-Skill/v5.0/.github/gallery/seed-shelf-slides.png)](https://raw.githubusercontent.com/Lanthanums/Risograph-Design-Skill/v5.0/.github/gallery/seed-shelf-slides.png)
 
 *The Seed Shelf* builds a different rhythm with staggered cards, a short timeline, large quotations and small paper scenes. Lists, charts and comparisons can sit on ruled stock or newsprint, while emphasis and spot color guide the reading order. Text, chart marks and diagrams remain editable PowerPoint objects.
 
 ## From generated picture to halftone print
 
-[![What the Rocks Remember, four slides showing two-ink halftone, single-ink halftone and source-color picture treatments](https://github.com/Lanthanums/Risograph-Design-Skill/releases/download/v5.0/rocks-image-treatment.png)](https://github.com/Lanthanums/Risograph-Design-Skill/releases/download/v5.0/rocks-image-treatment.png)
+[![What the Rocks Remember, four slides showing two-ink halftone, single-ink halftone and source-color picture treatments](https://raw.githubusercontent.com/Lanthanums/Risograph-Design-Skill/v5.0/.github/gallery/rocks-image-treatment.png)](https://raw.githubusercontent.com/Lanthanums/Risograph-Design-Skill/v5.0/.github/gallery/rocks-image-treatment.png)
 
 An agent with an image tool can generate a picture for a specific slide. The skill directs the brief toward one clear subject on a light ground, with strong light and shadow and no lettering or frame. An image supplied by the user can enter the same workflow through the outline’s `image` field.
 
@@ -24,7 +24,7 @@ The builder screens the picture into the deck’s spot inks and mounts it as a t
 
 ## Standalone poster gallery
 
-[![Four standalone Risograph posters for a repair café, slow reading, a night bus trial and ridership](https://github.com/Lanthanums/Risograph-Design-Skill/releases/download/v5.0/poster-gallery.png)](https://github.com/Lanthanums/Risograph-Design-Skill/releases/download/v5.0/poster-gallery.png)
+[![Four standalone Risograph posters for a repair café, slow reading, a night bus trial and ridership](https://raw.githubusercontent.com/Lanthanums/Risograph-Design-Skill/v5.0/.github/gallery/poster-gallery.png)](https://raw.githubusercontent.com/Lanthanums/Risograph-Design-Skill/v5.0/.github/gallery/poster-gallery.png)
 
 The poster builder composes one custom-sized PowerPoint page. A display masthead leads to an oversized statement or figure, followed by chart clippings, lists, steps and quotations. An ink strip carries the call to action and a kraft-paper footer holds the details. Text and data marks remain editable. The default canvas is A3 portrait, with A2, A4, square and 4:5 options.
 
@@ -45,6 +45,6 @@ python scripts/poster_run.py --outline ../riso-slides-testkit/poster-repair-outl
 
 The new outline form expands into a source inventory and coverage ledger, with a storyboard for decks. Existing plans and specs can still enter through the [documented input formats](references/input-formats.md). Use `--draft` for planning and `--mode audit` for a fresh render and QA. The deck’s `collage: off` and the poster’s `print: flat` offer simpler treatments. See [performance and cache](references/performance.md) for cache behavior.
 
-The install ZIP contains the runtime, its references and dependency lists. The gallery and fictional examples are separate release assets. Review the rendered slides or poster before delivery, including in PowerPoint when the final viewer matters.
+The install ZIP contains the runtime, its references and dependency lists. The repository hosts the gallery. The fictional examples are available in the release test kit. Review the rendered slides or poster before delivery, including in PowerPoint when the final viewer matters.
 
 Licensed under [MIT](LICENSE).
